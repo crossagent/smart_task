@@ -21,3 +21,10 @@ agents/
     ├── chat_reader_agent.py    #    - Agent for reading information from chat groups.
     └── permission_manager_agent.py #    - Agent for handling permissions.
 ```
+
+
+思考：
+1.研究-执行，根据执行结果调整的循环
+2.研究主要是逐渐明确任务的复杂度和归属
+3.聚合页面的展示和初始的任务记录是两码事
+4.根据意图选择工作流，工作流来保证风险步骤都有人类确认
