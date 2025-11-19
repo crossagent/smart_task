@@ -1,7 +1,7 @@
 from google.adk.agents import ParallelAgent
-from src.agents.inference.project import ProjectSuggester
-from src.agents.inference.time import DueDateEstimator
-from src.agents.inference.priority import PrioritySuggester
+from .project import ProjectSuggester
+from .time import DueDateEstimator
+from .priority import PrioritySuggester
 
 class InferenceOrchestrator(ParallelAgent):
     """
