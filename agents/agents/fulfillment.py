@@ -1,12 +1,4 @@
 from google.adk.agents import LlmAgent
-from pydantic import BaseModel, Field
-
-
-class FulfillmentResult(BaseModel):
-    """任务完成结果"""
-    success: bool = Field(description="是否成功创建任务")
-    task_id: str | None = Field(description="创建的任务ID,如果失败则为None")
-    message: str = Field(description="结果消息")
 
 
 def write_task_to_db(task_data: dict) -> str:
@@ -35,7 +27,7 @@ def Fulfillment(name: str = "Fulfillment") -> LlmAgent:
     - 调用工具将任务写入数据库
     - 或者向用户输出澄清问题
     
-    输出: 自动保存到 session.state["fulfillment_result"]
+    注意: ADK限制 - output_schema和tools不能同时使用,所以这里只用tools
     """
     return LlmAgent(
         name=name,
@@ -54,20 +46,17 @@ def Fulfillment(name: str = "Fulfillment") -> LlmAgent:
 1. 检查 {clarification} 中的 need_clarification 字段
 2. 如果 need_clarification 为 false:
    - 汇总所有已有字段和推断的高置信度字段
+   - 构建完整的task_data字典
    - 调用 write_task_to_db 工具创建任务
-   - 设置 success=true 和返回的 task_id
+   - 告诉用户任务已成功创建
 3. 如果 need_clarification 为 true:
    - 向用户输出 clarification.questions 中的问题
-   - 设置 success=false, task_id=null
-   - message 包含需要澄清的问题
+   - 不要调用工具
 
-请以JSON格式输出结果,包含:
-- success: 是否成功创建任务
-- task_id: 任务ID(如果成功)或null
-- message: 结果消息或澄清问题
+请用自然语言回复用户,告知结果或提出问题。
 """,
-        tools=[write_task_to_db],
-        output_schema=FulfillmentResult,
-        output_key="fulfillment_result"
+        tools=[write_task_to_db]
+        # 注意: 不能同时设置output_schema和tools,所以这里只用tools
     )
+
 
