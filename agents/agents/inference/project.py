@@ -1,30 +1,47 @@
-from typing import AsyncGenerator
-from google.adk.agents import BaseAgent
-from google.adk.agents.invocation_context import InvocationContext
-from google.adk.events import Event
-from google.genai import types
-from ...model.state import TaskState
+from google.adk.agents import LlmAgent
+from pydantic import BaseModel, Field
 
-class ProjectSuggester(BaseAgent):
+
+class ProjectSuggestion(BaseModel):
+    """项目推荐结果"""
+    suggested_project: str | None = Field(description="推荐的项目名称,如果无法推断则为None")
+    confidence: float = Field(description="置信度 0.0-1.0", ge=0.0, le=1.0)
+    reason: str = Field(description="推荐理由")
+
+
+def ProjectSuggester(name: str = "ProjectSuggester") -> LlmAgent:
     """
-    Agent responsible for suggesting a project if missing.
-    """
+    ProjectSuggester Agent - 推断任务所属项目
     
-    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-        state_dict = ctx.session.state.get("task_state", {})
-        if not state_dict: return
-        state = TaskState(**state_dict)
+    职责:
+    - 基于任务内容推断可能的项目归属
+    - 提供置信度和推荐理由
+    
+    输出: 自动保存到 session.state["project_suggestion"]
+    """
+    return LlmAgent(
+        name=name,
+        model="gemini-2.0-flash",
+        description="推断任务所属项目的Agent",
+        instruction="""
+你是一个项目推断助手。根据任务信息推断任务可能属于哪个项目。
 
-        if "project" in state.missing_fields:
-            print(f"[{self.name}] Inferring project...")
-            # Mock inference
-            suggestion = "Personal"
-            state.inference_candidates["project"] = suggestion
-            print(f"[{self.name}] Suggested project: {suggestion}")
-            
-            # Update state
-            ctx.session.state["task_state"] = state.__dict__
-            yield Event(
-                author=self.name, 
-                content=types.Content(parts=[types.Part(text=f"Suggested project: {suggestion}")])
-            )
+任务信息在session state的"basic_info"字段中。
+缺失字段信息在"scan_result"字段中。
+
+你的任务:
+1. 分析任务的标题和内容
+2. 如果"project"在缺失字段列表中,尝试推断任务可能属于的项目
+3. 给出推荐的项目名称、置信度(0.0-1.0)和推荐理由
+
+如果无法推断项目,将suggested_project设为null,confidence设为0.0。
+
+请以JSON格式输出结果,包含:
+- suggested_project: 推荐的项目名称或null  
+- confidence: 置信度(0.0到1.0之间的浮点数)
+- reason: 推荐理由的文字说明
+""",
+        output_schema=ProjectSuggestion,
+        output_key="project_suggestion"
+    )
+

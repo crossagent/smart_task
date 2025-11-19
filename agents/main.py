@@ -14,17 +14,15 @@ USER_ID = "user_123"
 SESSION_ID = "session_1"
 
 async def main():
-    # Initialize the workflow agent
+    # 初始化工作流 - 现在使用工厂函数
     agent = AddTaskWorkflow()
     
     # Setup session service
     session_service = InMemorySessionService()
     
-    # Create initial session with user input
-    # In a real app, this might come from a request
+    # 创建初始session,用户输入存储在user_input字段
     initial_state = {
-        "user_input": "Buy milk tomorrow",
-        "task_state": {} # Initialize empty task state
+        "user_input": "安排明天的会议",  # 测试输入
     }
     
     session = await session_service.create_session(
@@ -43,12 +41,11 @@ async def main():
         session_service=session_service
     )
     
-    # Run the workflow
-    # We send a dummy message to trigger the workflow, 
-    # but our agents currently look at session state 'user_input'
+    # 运行工作流
+    # 发送一个触发消息,实际的用户输入在session.state["user_input"]中
     content = types.Content(role='user', parts=[types.Part(text="Start workflow")])
     
-    logger.info("Starting workflow...")
+    logger.info("Starting AddTask workflow...")
     async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=content):
         if event.author:
              logger.info(f"Event from {event.author}:")
@@ -58,8 +55,10 @@ async def main():
 
     # Check final state
     final_session = await session_service.get_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
-    print("\n--- Final Task State ---")
-    print(final_session.state.get("task_state"))
+    print("\n--- Final Session State ---")
+    for key, value in final_session.state.items():
+        print(f"{key}: {value}")
 
 if __name__ == "__main__":
     asyncio.run(main())
+
