@@ -1,0 +1,20 @@
+[
+  {
+    "name": "query_tasks",
+    "data": [
+      {
+        "query": "What are my tasks for today?",
+        "regex_match": "get_database_schema.*Task.*query_database.*SELECT.*FROM.*Task"
+      }
+    ]
+  },
+  {
+    "name": "add_task",
+    "data": [
+      {
+        "query": "Add a new task 'Buy milk' with high priority.",
+        "regex_match": "add_task_to_database.*Buy milk.*High"
+      }
+    ]
+  }
+]
