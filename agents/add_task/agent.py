@@ -29,3 +29,5 @@ def AddTaskWorkflow(name: str = "AddTaskWorkflow") -> SequentialAgent:
         ]
     )
 
+
+add_task_agent = AddTaskWorkflow()

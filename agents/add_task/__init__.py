@@ -1,1 +1,1 @@
-from .agent import AddTaskWorkflow
+from .agent import AddTaskWorkflow, add_task_agent as agent

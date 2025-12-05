@@ -75,3 +75,5 @@ class DispatcherAgent(BaseAgent):
         # For now, assume everything is an add_task request
         # unless it's clearly asking for something else
         return "add_task"
+
+dispatcher_agent = DispatcherAgent()
