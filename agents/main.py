@@ -3,7 +3,7 @@ import logging
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
-from .workflows.add_task import AddTaskWorkflow
+from .add_task.agent import AddTaskWorkflow
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

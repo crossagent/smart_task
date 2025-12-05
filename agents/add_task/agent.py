@@ -1,9 +1,9 @@
 from google.adk.agents import SequentialAgent
-from ..agents.intake import IntakeRouter
-from ..agents.scanner import SchemaScanner
-from ..agents.inference.orchestrator import InferenceOrchestrator
-from ..agents.clarification import ClarificationSynthesizer
-from ..agents.fulfillment import Fulfillment
+from .intake import IntakeRouter
+from .scanner import SchemaScanner
+from .task_info_inference import InferenceOrchestrator
+from .clarification import ClarificationSynthesizer
+from .fulfillment import Fulfillment
 
 
 def AddTaskWorkflow(name: str = "AddTaskWorkflow") -> SequentialAgent:

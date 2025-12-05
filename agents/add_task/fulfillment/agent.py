@@ -1,7 +1,8 @@
+from typing import Dict
 from google.adk.agents import LlmAgent
 
 
-def write_task_to_db(task_data: dict) -> str:
+def write_task_to_db(task_data: str) -> str:
     """
     将任务写入数据库的工具函数
     

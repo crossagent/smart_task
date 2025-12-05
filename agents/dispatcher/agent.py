@@ -3,7 +3,7 @@ from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event
 from google.genai import types
-from .workflows.add_task import AddTaskWorkflow
+from ..add_task.agent import AddTaskWorkflow
 
 
 class DispatcherAgent(BaseAgent):

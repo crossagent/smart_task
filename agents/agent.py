@@ -6,7 +6,7 @@ The DispatcherAgent serves as the main entry point that routes requests
 to appropriate workflows.
 """
 
-from .dispatcher_agent import DispatcherAgent
+from .dispatcher.agent import DispatcherAgent
 
 # ADK web requires a 'root_agent' variable
 root_agent = DispatcherAgent(name="SmartTaskAgent")

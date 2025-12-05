@@ -1,3 +1,4 @@
+from typing import Dict
 from google.adk.agents import LlmAgent
 from pydantic import BaseModel, Field
 
@@ -6,7 +7,7 @@ class ClarificationMessage(BaseModel):
     """澄清消息结果"""
     need_clarification: bool = Field(description="是否需要用户澄清")
     questions: list[str] = Field(description="需要询问的问题列表")
-    suggestions: dict = Field(description="推荐的值字典")
+    suggestions: str = Field(description="推荐的值字典(JSON字符串)")
 
 
 def ClarificationSynthesizer(name: str = "ClarificationSynthesizer") -> LlmAgent:

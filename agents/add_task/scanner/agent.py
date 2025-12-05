@@ -1,10 +1,11 @@
+from typing import Dict
 from google.adk.agents import LlmAgent
 from pydantic import BaseModel, Field
 
 
 class MissingFieldsResult(BaseModel):
     """Schema扫描结果"""
-    parsed_fields: dict = Field(description="已解析的字段字典")
+    parsed_fields: str = Field(description="已解析的字段字典(JSON字符串)")
     missing_fields: list[str] = Field(description="缺失的必填字段列表")
     all_fields_present: bool = Field(description="是否所有必填字段都已齐全")
 
