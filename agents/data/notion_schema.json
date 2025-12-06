@@ -1,0 +1,138 @@
+{
+  "Project": {
+    "Launch date": {
+      "type": "date"
+    },
+    "Tag": {
+      "type": "select",
+      "options": [
+        "Enterprise"
+      ]
+    },
+    "Teams": {
+      "type": "multi_select",
+      "options": [
+        "Product",
+        "Data",
+        "UX",
+        "Marketing",
+        "Content",
+        "Analytics",
+        "Engineering"
+      ]
+    },
+    "Project name": {
+      "type": "title"
+    },
+    "Owner": {
+      "type": "people"
+    },
+    "Status": {
+      "type": "status",
+      "options": [
+        "Planning",
+        "In Progress",
+        "Paused",
+        "Backlog",
+        "Done",
+        "Canceled"
+      ]
+    },
+    "Completion": {
+      "type": "rollup"
+    },
+    "Priority": {
+      "type": "select",
+      "options": [
+        "Low",
+        "Medium",
+        "High"
+      ]
+    },
+    "Dates": {
+      "type": "date"
+    },
+    "Summary": {
+      "type": "rich_text"
+    },
+    "Tasks": {
+      "type": "relation"
+    },
+    "Is Blocking": {
+      "type": "relation"
+    },
+    "Blocked By": {
+      "type": "relation"
+    }
+  },
+  "Task": {
+    "Rollup": {
+      "type": "rollup"
+    },
+    "Formula": {
+      "type": "formula"
+    },
+    "Task name": {
+      "type": "title"
+    },
+    "Tags": {
+      "type": "multi_select",
+      "options": [
+        "Mobile",
+        "Website",
+        "Improvement",
+        "Marketing",
+        "Research",
+        "Branding",
+        "Video production",
+        "Metrics",
+        "UI/UX",
+        "Development",
+        "User feedback",
+        "Customer support",
+        "Staff training"
+      ]
+    },
+    "Assignee": {
+      "type": "people"
+    },
+    "Status": {
+      "type": "status",
+      "options": [
+        "Not Started",
+        "In Progress",
+        "Done",
+        "Archived"
+      ]
+    },
+    "Due": {
+      "type": "date"
+    },
+    "Priority": {
+      "type": "select",
+      "options": [
+        "Low",
+        "Medium",
+        "High"
+      ]
+    },
+    "Sub-tasks": {
+      "type": "relation"
+    },
+    "Description": {
+      "type": "rich_text"
+    },
+    "Parent-task": {
+      "type": "relation"
+    },
+    "Is Blocking": {
+      "type": "relation"
+    },
+    "Blocked By": {
+      "type": "relation"
+    },
+    "Project": {
+      "type": "relation"
+    }
+  }
+}
