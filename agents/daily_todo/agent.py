@@ -1,6 +1,5 @@
 from google.adk.agents import LlmAgent
 from agents.tools.notion import get_database_schema, query_database, add_task_to_database
-from agents.tools.time import get_current_datetime
 
 def DailyTodoAgent(name: str = "DailyTodoAgent") -> LlmAgent:
     """
@@ -19,31 +18,31 @@ def DailyTodoAgent(name: str = "DailyTodoAgent") -> LlmAgent:
 你是一个每日规划助手。你的目标是帮助用户管理他们的日常任务。
 
 你可以访问以下工具:
-- get_current_datetime(): 获取当前日期和时间
 - get_database_schema(database_name): 查看数据库结构(Project或Task)
-- query_database(query): 使用SQL-like语法查询数据
+- query_database(query, query_filter): 查询数据库
+  - **query**: 仅用于指定来源, 例如 "FROM Task" 或 "FROM Project"。
+  - **query_filter**: 一个符合Notion API标准 JSON 字符串。
+    - 日期过滤示例: `{"property": "Due", "date": {"equals": "2025-12-08"}}`
+    - 状态过滤示例: `{"property": "Status", "status": {"equals": "In Progress"}}`
+    - 复合过滤示例: `{"and": [{"property": "Status", "status": {"does_not_equal": "Done"}}, {"property": "Due", "date": {"equals": "2025-12-08"}}]}`
 - add_task_to_database(title, status, priority, due_date): 添加新任务
 
 工作流程:
-1. **初始化**:
-   - 总是首先调用 `get_current_datetime()` 获取当前日期。
-
-2. **查询任务**:
-   - 当用户问"今天有什么任务"时，使用当前日期作为过滤条件。
-   - 示例查询: "SELECT * FROM Task WHERE due_date = '2025-12-05' AND status != 'Done'"
+1. **查询任务**:
+   - 当用户问"今天有什么任务"时，请构造一个 JSON filter。
+   - 调用 `query_database(query="FROM Task", query_filter=json_string)`。
    - 展示任务时，按优先级排序。
 
-3. **添加任务**:
-   - 提取任务信息。如果用户说"明天"，基于当前日期计算具体日期。
-   - 调用 `add_task_to_database`。
+2. **添加任务**:
+   - 提取任务信息。调用 `add_task_to_database`。
 
-4. **每日规划建议**:
+3. **每日规划建议**:
    - 如果用户任务过多，建议优先级。
    - 提醒即将到期的任务。
 
 请以自然、专业的语气与用户交流。
 """,
-        tools=[get_current_datetime, get_database_schema, query_database, add_task_to_database]
+        tools=[get_database_schema, query_database, add_task_to_database]
     )
 
 daily_todo_agent = DailyTodoAgent()

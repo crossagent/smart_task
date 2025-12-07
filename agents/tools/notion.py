@@ -74,11 +74,15 @@ def get_database_schema(database_name: str) -> str:
     
     return json.dumps({"error": f"Database {database_name} not found in schema definition."})
 
-def query_database(query: str) -> str:
+def query_database(query: str, query_filter: Optional[str] = None) -> str:
     """
-    Executes a SQL-like query against the Notion databases.
-    Supported syntax: SELECT * FROM [Table] WHERE [Condition]
-    Example: "SELECT * FROM Task WHERE status = 'In Progress'"
+    Executes a query against the Notion databases using Notion's native filter syntax.
+    
+    Args:
+        query: Used ONLY to select the database ('FROM Project' or 'FROM Task').
+        query_filter: A JSON string representing the Notion 'filter' object.
+                      Example: {"property": "Status", "status": {"equals": "Done"}}
+                      Docs: https://developers.notion.com/reference/post-database-query-filter
     """
     client = _get_notion_client()
     if not client:
@@ -86,13 +90,17 @@ def query_database(query: str) -> str:
 
     # Determine database
     database_id = None
-    if "from project" in query.lower():
+    if query and "from project" in query.lower():
         database_id = NOTION_PROJECT_DATABASE_ID
-    elif "from task" in query.lower():
+    elif query and "from task" in query.lower():
+        database_id = NOTION_TASK_DATABASE_ID
+    else:
+        # Fallback default to Task if not specified, or error
+        # Let's default to Task for ease of use if not specified
         database_id = NOTION_TASK_DATABASE_ID
     
     if not database_id:
-        return json.dumps({"error": "Could not determine database from query. Use 'FROM Project' or 'FROM Task'."})
+        return json.dumps({"error": "Could not determine database. Use 'FROM Project' or 'FROM Task' in query arg, or default to Task."})
 
     # Get Data Source ID
     data_source_id = _get_data_source_id(client, database_id)
@@ -100,12 +108,25 @@ def query_database(query: str) -> str:
         return json.dumps({"error": "Could not resolve Data Source ID."})
 
     try:
-        # TODO: Implement actual SQL-to-Notion-Filter parsing
-        # For now, just fetch recent items
+        body = {"page_size": 10}
+        
+        if query_filter:
+            try:
+                if isinstance(query_filter, str):
+                    filter_obj = json.loads(query_filter)
+                else:
+                    filter_obj = query_filter
+                
+                if filter_obj:
+                    print(f"[Notion] Applying native filter: {filter_obj}")
+                    body["filter"] = filter_obj
+            except json.JSONDecodeError:
+                return json.dumps({"error": "Invalid JSON format in query_filter."})
+
         response = client.request(
             method="POST",
             path=f"data_sources/{data_source_id}/query",
-            body={"page_size": 10}
+            body=body
         )
         
         results = response.get("results", [])
@@ -115,7 +136,6 @@ def query_database(query: str) -> str:
             item = {"id": page["id"]}
             
             # Extract common fields
-            # Note: This depends on the actual property names in Notion
             for key, value in props.items():
                 if value["type"] == "title":
                     item["title"] = value["title"][0]["text"]["content"] if value["title"] else ""
