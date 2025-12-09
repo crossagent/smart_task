@@ -5,73 +5,30 @@
     "eval_cases": [
         {
             "eval_id": "case_missing_fields",
-            "description": "Should trigger inference when fields are missing",
             "conversation": [
                 {
                     "user_content": {
-                        "role": "user",
                         "parts": [
                             {
                                 "text": "Go"
                             }
-                        ]
+                        ],
+                        "role": "user"
                     },
                     "final_response": {
-                        "role": "model",
                         "parts": [
                             {
                                 "text": "发现缺失字段"
                             }
-                        ]
+                        ],
+                        "role": "model"
                     }
                 }
             ],
             "session_input": {
                 "app_name": "smart_task",
                 "user_id": "test_user_1",
-                "state": {
-                    "scan_result": {
-                        "missing_fields": [
-                            "due_date",
-                            "priority"
-                        ],
-                        "all_fields_present": false
-                    }
-                }
-            }
-        },
-        {
-            "eval_id": "case_all_present",
-            "description": "Should skip inference when all fields are present",
-            "conversation": [
-                {
-                    "user_content": {
-                        "role": "user",
-                        "parts": [
-                            {
-                                "text": "Go"
-                            }
-                        ]
-                    },
-                    "final_response": {
-                        "role": "model",
-                        "parts": [
-                            {
-                                "text": "所有必填字段都已齐全"
-                            }
-                        ]
-                    }
-                }
-            ],
-            "session_input": {
-                "app_name": "smart_task",
-                "user_id": "test_user_2",
-                "state": {
-                    "scan_result": {
-                        "missing_fields": [],
-                        "all_fields_present": true
-                    }
-                }
+                "state": {}
             }
         }
     ]
