@@ -1,1 +1,1 @@
-from .agent import InferenceOrchestrator
+from .agent import inference_orchestrator

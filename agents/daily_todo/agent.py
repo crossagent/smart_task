@@ -1,5 +1,6 @@
 from google.adk.agents import LlmAgent
 from agents.tools.notion import get_database_schema, query_database, add_task_to_database
+from agents.daily_todo.callbacks import inject_current_time
 
 def DailyTodoAgent(name: str = "DailyTodoAgent") -> LlmAgent:
     """
@@ -16,6 +17,7 @@ def DailyTodoAgent(name: str = "DailyTodoAgent") -> LlmAgent:
         description="每日待办事项管理助手",
         instruction="""
 你是一个每日规划助手。你的目标是帮助用户管理他们的日常任务。
+当前日期: {current_date} ({current_weekday})
 
 你可以访问以下工具:
 - get_database_schema(database_name): 查看数据库结构(Project或Task)
@@ -42,7 +44,8 @@ def DailyTodoAgent(name: str = "DailyTodoAgent") -> LlmAgent:
 
 请以自然、专业的语气与用户交流。
 """,
-        tools=[get_database_schema, query_database, add_task_to_database]
+        tools=[get_database_schema, query_database, add_task_to_database],
+        before_agent_callback=[inject_current_time]
     )
 
 daily_todo_agent = DailyTodoAgent()

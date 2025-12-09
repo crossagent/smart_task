@@ -87,3 +87,6 @@ class InferenceOrchestrator(BaseAgent):
                 text="并行推断完成。"
             )])
         )
+
+
+inference_orchestrator = InferenceOrchestrator()
