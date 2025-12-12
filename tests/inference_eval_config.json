@@ -1,0 +1,19 @@
+{
+    "criteria": {
+        "rubric_based_final_response_quality_v1": {
+            "threshold": 1.0,
+            "rubrics": [
+                {
+                    "rubric_id": "check_inference_logic",
+                    "rubric_content": {
+                        "text_property": "Analyze the 'SCENARIO' described in the User Prompt to understand which fields are missing. Then check the Agent Response.\n\n1. If a field is missing (e.g., priority, project, due_date), the response MUST contain the inferred result for that field (e.g., '优先级: High', '项目: ...', '时间: ...').\n2. The inferred value must be logically consistent with the 'Task content' provided in the prompt (e.g., 'Urgent' -> High Priority).\n3. If the scenario says 'No fields are missing', the response MUST indicate that inference was skipped or no results were produced."
+                    }
+                }
+            ]
+        }
+    },
+    "judge_model_options": {
+        "judge_model": "gemini-2.5-flash",
+        "num_samples": 1
+    }
+}

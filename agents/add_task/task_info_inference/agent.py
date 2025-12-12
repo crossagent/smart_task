@@ -82,10 +82,22 @@ class InferenceOrchestrator(BaseAgent):
         async for event in self.parallel_inference._run_async_impl(ctx):
             yield event
         
+        # 收集推断结果用于Final Response (便于评估和调试)
+        results = []
+        state = ctx.session.state
+        if "priority_suggestion" in state:
+            results.append(f"优先级: {state['priority_suggestion'].get('suggested_priority', 'unknown')}")
+        if "project_suggestion" in state:
+            results.append(f"项目: {state['project_suggestion'].get('suggested_project', 'unknown')}")
+        if "due_date_estimation" in state:
+            results.append(f"时间: {state['due_date_estimation'].get('date', 'unknown')}")
+
+        summary = ", ".join(results) if results else "无推断结果"
+
         yield Event(
             author=self.name,
             content=types.Content(parts=[types.Part(
-                text="并行推断完成。"
+                text=f"并行推断完成。{summary}"
             )])
         )
 

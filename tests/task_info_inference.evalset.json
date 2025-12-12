@@ -1,34 +1,117 @@
 {
     "eval_set_id": "task_info_inference_eval_set",
     "name": "Task Info Inference Eval Set",
-    "description": "Test cases for InferenceOrchestrator conditional logic",
+    "description": "Evaluation for Task Info Inference Sub-agents",
     "eval_cases": [
         {
-            "eval_id": "case_missing_fields",
-            "conversation": [
-                {
-                    "user_content": {
-                        "parts": [
-                            {
-                                "text": "Go"
-                            }
-                        ],
-                        "role": "user"
-                    },
-                    "final_response": {
-                        "parts": [
-                            {
-                                "text": "发现缺失字段"
-                            }
-                        ],
-                        "role": "model"
-                    }
-                }
-            ],
+            "eval_id": "infer_priority_high",
+            "conversation_scenario": {
+                "starting_prompt": "SCENARIO: Field 'priority' is missing. Task content is 'URGENT: Server is down! Fix ASAP'.",
+                "conversation_plan": "User provides context about missing fields and expects the agent to infer priority."
+            },
             "session_input": {
                 "app_name": "smart_task",
-                "user_id": "test_user_1",
-                "state": {}
+                "user_id": "test_user",
+                "state": {
+                    "scan_result": {
+                        "missing_fields": [
+                            "priority"
+                        ]
+                    },
+                    "basic_info": {
+                        "task_content": "URGENT: Server is down! Fix ASAP",
+                        "raw_input": "URGENT: Server is down! Fix ASAP"
+                    }
+                }
+            }
+        },
+        {
+            "eval_id": "infer_project",
+            "conversation_scenario": {
+                "starting_prompt": "SCENARIO: Field 'project' is missing. Task content is 'Update the roadmap for SmartTask project'.",
+                "conversation_plan": "User provides context about missing fields and expects the agent to infer project."
+            },
+            "session_input": {
+                "app_name": "smart_task",
+                "user_id": "test_user",
+                "state": {
+                    "scan_result": {
+                        "missing_fields": [
+                            "project"
+                        ]
+                    },
+                    "basic_info": {
+                        "task_content": "Update the roadmap for SmartTask project",
+                        "raw_input": "Update the roadmap for SmartTask project"
+                    }
+                }
+            }
+        },
+        {
+            "eval_id": "infer_time",
+            "conversation_scenario": {
+                "starting_prompt": "SCENARIO: Field 'due_date' is missing. Task content is 'Submit report by next Friday'.",
+                "conversation_plan": "User provides context about missing fields and expects the agent to infer due date."
+            },
+            "session_input": {
+                "app_name": "smart_task",
+                "user_id": "test_user",
+                "state": {
+                    "scan_result": {
+                        "missing_fields": [
+                            "due_date"
+                        ]
+                    },
+                    "basic_info": {
+                        "task_content": "Submit report by next Friday",
+                        "raw_input": "Submit report by next Friday"
+                    }
+                }
+            }
+        },
+        {
+            "eval_id": "infer_all_fields",
+            "conversation_scenario": {
+                "starting_prompt": "SCENARIO: Fields 'priority', 'project', 'due_date' are missing. Task content is 'Urgent SmartTask report due tomorrow'.",
+                "conversation_plan": "User provides context about missing fields and expects the agent to infer all missing fields."
+            },
+            "session_input": {
+                "app_name": "smart_task",
+                "user_id": "test_user",
+                "state": {
+                    "scan_result": {
+                        "missing_fields": [
+                            "priority",
+                            "project",
+                            "due_date"
+                        ]
+                    },
+                    "basic_info": {
+                        "task_content": "Urgent SmartTask report due tomorrow",
+                        "raw_input": "Urgent SmartTask report due tomorrow"
+                    }
+                }
+            }
+        },
+        {
+            "eval_id": "skip_inference",
+            "conversation_scenario": {
+                "starting_prompt": "SCENARIO: No fields are missing. Task content is 'Just a task'.",
+                "conversation_plan": "User provides context that no fields are missing and expects the agent to skip inference."
+            },
+            "session_input": {
+                "app_name": "smart_task",
+                "user_id": "test_user",
+                "state": {
+                    "scan_result": {
+                        "missing_fields": [],
+                        "all_fields_present": true
+                    },
+                    "basic_info": {
+                        "task_content": "Just a task",
+                        "raw_input": "Just a task"
+                    }
+                }
             }
         }
     ]
