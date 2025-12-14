@@ -79,7 +79,7 @@ def query_database(query: str, query_filter: Optional[str] = None) -> str:
     Executes a query against the Notion databases using Notion's native filter syntax.
     
     Args:
-        query: Used ONLY to select the database ('FROM Project' or 'FROM Task').
+        query: Used ONLY to select the database ('Project' or 'Task').
         query_filter: A JSON string representing the Notion 'filter' object.
                       Example: {"property": "Status", "status": {"equals": "Done"}}
                       Docs: https://developers.notion.com/reference/post-database-query-filter
@@ -90,9 +90,11 @@ def query_database(query: str, query_filter: Optional[str] = None) -> str:
 
     # Determine database
     database_id = None
-    if query and "from project" in query.lower():
+    q_lower = query.lower() if query else ""
+    
+    if "project" in q_lower:
         database_id = NOTION_PROJECT_DATABASE_ID
-    elif query and "from task" in query.lower():
+    elif "task" in q_lower:
         database_id = NOTION_TASK_DATABASE_ID
     else:
         # Fallback default to Task if not specified, or error
