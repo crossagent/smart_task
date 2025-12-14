@@ -1,0 +1,19 @@
+{
+    "criteria": {
+        "rubric_based_final_response_quality_v1": {
+            "threshold": 1.0,
+            "rubrics": [
+                {
+                    "rubric_id": "check_project_output",
+                    "rubric_content": {
+                        "text_property": "The response should be a valid JSON object containing 'suggested_project', 'confidence', and 'reason'.\n\n1. If the prompt implies 'SmartTask', 'suggested_project' should include 'SmartTask'.\n2. If the prompt implies 'Personal' tasks, it should infer 'Personal' or similar.\n3. If vague, 'suggested_project' should be null or 'unknown'."
+                    }
+                }
+            ]
+        }
+    },
+    "judge_model_options": {
+        "judge_model": "gemini-2.5-flash",
+        "num_samples": 1
+    }
+}
