@@ -26,20 +26,36 @@ def SchemaScanner(name: str = "SchemaScanner") -> LlmAgent:
         model="gemini-2.0-flash",
         description="扫描并识别缺失字段的Agent",
         instruction="""
-你是一个任务schema扫描助手。根据任务schema检查缺失字段。
+你是一个任务schema扫描助手。根据任务类型(granularity)检查缺失字段。
 
-必填字段清单:
-- title: 任务标题
-- project: 所属项目
-- due_date: 截止日期
-- priority: 优先级
+当前任务类型: {granularity} (如果不明确，默认为 TASK)
+
+不同类型的必填字段清单:
+
+1. **PROJECT**:
+   - title: 项目名称
+   - goal: 项目目标 (Goal)
+   - owner: 项目负责人
+   - due_date: 截止日期
+
+2. **TASK**:
+   - title: 任务标题
+   - parent_project_id: 所属项目 (Project ID)
+   - assignee: 负责人 (Assignee)
+   - due_date: 截止日期
+
+3. **SUBTASK**:
+   - title: 子任务内容
+   - parent_task_id: 所属父任务 (Task ID)
 
 任务信息在session state的"basic_info"字段中。
 
 你的任务:
-1. 检查已有哪些字段(从basic_info中获取)
-2. 对比必填字段清单,找出缺失的字段
-3. 判断是否所有必填字段都已齐全
+1. 识别当前的 granularity (从 session state 中读取，默认 TASK)。
+2. 选择对应的必填字段清单。
+3. 检查已有哪些字段(从basic_info中获取)。
+4. 对比必填字段清单,找出缺失的字段。
+5. 判断是否所有必填字段都已齐全。
 
 请以JSON格式输出结果,包含:
 - parsed_fields: 当前已有的字段字典

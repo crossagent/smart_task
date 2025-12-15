@@ -7,6 +7,7 @@ from google.genai import types
 from .project import ProjectSuggester
 from .time import DueDateEstimator
 from .priority import PrioritySuggester
+from .basic_info import BasicInfoInference
 
 
 class InferenceOrchestrator(BaseAgent):
@@ -35,6 +36,7 @@ class InferenceOrchestrator(BaseAgent):
         parallel_inference = ParallelAgent(
             name="ParallelInference",
             sub_agents=[
+                BasicInfoInference(),
                 ProjectSuggester(),
                 DueDateEstimator(),
                 PrioritySuggester()
