@@ -1,11 +1,11 @@
-from typing import AsyncGenerator
+from typing import AsyncGenerator, List, Dict, Any, Optional
 
-from google.adk.agents import BaseAgent
-from google.adk.agents.invocation_context import InvocationContext
+from google.adk.agents import LlmAgent
+from google.adk.agents.invocation_context import InvocationContext, ToolContext
 from google.adk.events import Event
 from google.genai import types
 
-# Import sub-agents
+# Import Skills (Sub-Agents)
 from .granularity.agent import GranularityAdvisor
 from .scanner import SchemaScanner
 from .task_info_inference import InferenceOrchestrator as InfoInferenceOrchestrator
@@ -13,115 +13,98 @@ from .clarification import ClarificationSynthesizer
 from .fulfillment import Fulfillment
 
 
-class AddTaskWorkflow(BaseAgent):
+from typing import AsyncGenerator, List, Dict, Any, Optional
+
+from google.adk.agents import LlmAgent, BaseAgent
+from google.adk.agents.invocation_context import InvocationContext, ToolContext
+from google.adk.events import Event
+from google.adk.tools import AgentTool  # Native Import
+from google.genai import types
+
+# Import Skills (Sub-Agents)
+from .granularity.agent import GranularityAdvisor
+from .scanner import SchemaScanner
+from .task_info_inference import InferenceOrchestrator as InfoInferenceOrchestrator
+from .clarification import ClarificationSynthesizer
+from .fulfillment import Fulfillment
+
+
+# --- Artifact Tools (Standalone Functions) ---
+
+def read_task_artifact(context: ToolContext) -> str:
+    """Reads the content of the 'task.md' artifact."""
+    content = context.session.state.get("task_md_content", "")
+    return content if content else "(Artifact is empty)"
+
+def update_task_artifact(context: ToolContext, content: str) -> str:
+    """Updates (overwrites) the 'task.md' artifact with new markdown content."""
+    context.session.state["task_md_content"] = content
+    try:
+        # Simulate saving to ADK Artifacts
+        pass 
+    except Exception:
+        pass
+    return "Artifact 'task.md' updated successfully."
+
+
+def AddTaskWorkflow(name: str = "AddTaskWorkflow") -> BaseAgent:
     """
-    AddTaskWorkflow - 动态根编排器 (Dynamic Root Orchestrator)
+    AddTaskWorkflow - Root Agent (LlmAgent)
     
-    职责:
-    - 作为 Add Task 工作流的唯一入口
-    - 显式管理生命周期: 意图分析 -> 缺失扫描 -> 并行推断 -> 澄清提问 -> 执行
-    - 支持多轮对话中的"暂停与恢复"
+    Architecture:
+    - Root: LlmAgent (The Manager)
+    - Tools: 
+      1. Artifact Tools (read/update plan)
+      2. Sub-Agents (wrapped as Native AgentTools)
     """
     
-    # Sub-agents
-    advisor: BaseAgent
-    scanner: BaseAgent
-    inference: BaseAgent
-    clarification: BaseAgent
-    fulfillment: BaseAgent
+    # 1. Instantiate Sub-Agents (Skills)
+    advisor = GranularityAdvisor()
+    scanner = SchemaScanner()
+    inference = InfoInferenceOrchestrator()
+    clarifier = ClarificationSynthesizer()
+    fulfillment = Fulfillment()
     
-    model_config = {"arbitrary_types_allowed": True}
+    # 2. Wrap them as Tools using Native ADK Wrapper
+    # The Root LLM will see these as tools: 'run_granularityadvisor', 'run_schemascanner', etc.
+    skill_tools = [
+        AgentTool(advisor),
+        AgentTool(scanner),
+        AgentTool(inference),
+        AgentTool(clarifier),
+        AgentTool(fulfillment)
+    ]
     
-    def __init__(self, name: str = "AddTaskWorkflow"):
-        # Instantiate sub-agents
-        advisor = GranularityAdvisor()
-        scanner = SchemaScanner()
-        inference = InfoInferenceOrchestrator()
-        clarification = ClarificationSynthesizer()
-        fulfillment = Fulfillment()
-        
-        super().__init__(
-            name=name,
-            advisor=advisor,
-            scanner=scanner,
-            inference=inference,
-            clarification=clarification,
-            fulfillment=fulfillment,
-            sub_agents=[advisor, scanner, inference, clarification, fulfillment]
-        )
-        self.advisor = advisor
-        self.scanner = scanner
-        self.inference = inference
-        self.clarification = clarification
-        self.fulfillment = fulfillment
-        
-    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-        # =========================================================
-        # Phase 1: Granularity Analysis & Intake (Always Run)
-        # =========================================================
-        # 即使是第二轮对话，我们也重新分析，以捕捉用户"改变主意"或"纠正意图"的情况
-        async for event in self.advisor.run(ctx):
-            yield event
-            
-        granularity_result = ctx.session.state.get("granularity_result")
-        if not granularity_result:
-            yield Event(author=self.name, content=types.Content(parts=[types.Part(text="Error: Analysis failed.")]))
-            return
-
-        decision = granularity_result.get("decision")
-        confidence = granularity_result.get("confidence", 0.0)
-        clarification_q = granularity_result.get("clarification_question")
-
-        # 将分析出的 title/type/granularity 注入到 basic_info 以供后续流程使用
-        # SchemaScanner 和 Inference 依赖 basic_info
-        ctx.session.state["basic_info"] = {
-            "title": granularity_result.get("title", ""),
-            "type": granularity_result.get("type", "task"),
-            "raw_input": ctx.session.state.get("user_input", "") 
-        }
-        ctx.session.state["granularity"] = decision
-
-        # 阈值检查: 如果意图模糊，直接提问并返回
-        if decision == "AMBIGUOUS" or confidence < 0.8:
-            question = clarification_q if clarification_q else "Could you clarify if this is a Project or Task?"
-            yield Event(author=self.name, content=types.Content(parts=[types.Part(text=question)]))
-            # STOP EXECUTION: 等待用户下一轮输入
-            return
-
-        # =========================================================
-        # Phase 2: Schema Scanning (Missing Fields)
-        # =========================================================
-        # 根据确定的 Granularity 扫描缺失字段
-        async for event in self.scanner.run(ctx):
-            yield event
-            
-        # =========================================================
-        # Phase 3: Inference (Fill Missing)
-        # =========================================================
-        # 尝试使用各种推断 Agent 填充缺失字段
-        async for event in self.inference.run(ctx):
-            yield event
-            
-        # =========================================================
-        # Phase 4: Clarification check
-        # =========================================================
-        # 综合当前所有信息，判断是否还需要问用户
-        async for event in self.clarification.run(ctx):
-            yield event
-            
-        clarification_state = ctx.session.state.get("clarification", {})
-        if clarification_state.get("needs_clarification"):
-            question = clarification_state.get("question")
-            yield Event(author=self.name, content=types.Content(parts=[types.Part(text=question)]))
-            # STOP EXECUTION: 等待用户补充信息
-            return
-
-        # =========================================================
-        # Phase 5: Fulfillment (Execution)
-        # =========================================================
-        # 信息已完备，执行写入
-        async for event in self.fulfillment.run(ctx):
-            yield event
+    # 3. Create Root Agent
+    return LlmAgent(
+        name=name,
+        system_prompt=(
+            "You are an autonomous workflow manager for creating tasks/projects.\n"
+            "Your Single Source of Truth is the `task.md` artifact. "
+            "You must maintain a checklist in `task.md` to track progress.\n\n"
+            "**Workflow**:\n"
+            "1. ALWAYS read the `task.md` artifact first (`read_task_artifact`).\n"
+            "2. If `task.md` is empty, initialize it with a default plan using `update_task_artifact`.\n"
+            "   Default Plan:\n"
+            "   - [ ] Analyze Input (Granularity)\n"
+            "   - [ ] Scan for Missing Fields\n"
+            "   - [ ] Infer Missing Info\n"
+            "   - [ ] Fulfillment\n"
+            "3. Look for the next unchecked item `[ ]`.\n"
+            "4. Call the corresponding Agent Tool (e.g., `run_granularityadvisor`).\n"
+            "5. After the agent returns success, update `task.md` to mark it as `[x]`.\n"
+            "6. If an agent reports ambiguity/issues (e.g., Granularity is AMBIGUOUS), insert a clarification step `[ ] Ask User` into `task.md` and ASK the user.\n"
+            "7. Repeat until all items are `[x]`.\n\n"
+            "**Constraint**:\n"
+            " - Do not make up information. Use the tools.\n"
+            " - If you need to ask the user, just output the question as your final response."
+        ),
+        tools=[
+            read_task_artifact,
+            update_task_artifact,
+            *skill_tools
+        ]
+    )
 
 
 add_task_agent = AddTaskWorkflow()
