@@ -1,22 +1,9 @@
-from typing import AsyncGenerator, List, Dict, Any, Optional
-
-from google.adk.agents import LlmAgent
-from google.adk.agents.invocation_context import InvocationContext, ToolContext
-from google.adk.events import Event
-from google.genai import types
-
-# Import Skills (Sub-Agents)
-from .granularity.agent import GranularityAdvisor
-from .scanner import SchemaScanner
-from .task_info_inference import InferenceOrchestrator as InfoInferenceOrchestrator
-from .clarification import ClarificationSynthesizer
-from .fulfillment import Fulfillment
-
 
 from typing import AsyncGenerator, List, Dict, Any, Optional
 
 from google.adk.agents import LlmAgent, BaseAgent
-from google.adk.agents.invocation_context import InvocationContext, ToolContext
+from google.adk.agents.invocation_context import InvocationContext
+from google.adk.tools import ToolContext
 from google.adk.events import Event
 from google.adk.tools import AgentTool  # Native Import
 from google.genai import types
@@ -78,7 +65,7 @@ def AddTaskWorkflow(name: str = "AddTaskWorkflow") -> BaseAgent:
     # 3. Create Root Agent
     return LlmAgent(
         name=name,
-        system_prompt=(
+        instruction=(
             "You are an autonomous workflow manager for creating tasks/projects.\n"
             "Your Single Source of Truth is the `task.md` artifact. "
             "You must maintain a checklist in `task.md` to track progress.\n\n"
