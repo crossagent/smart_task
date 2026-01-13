@@ -9,7 +9,9 @@ from fastapi import FastAPI
 from ag_ui_adk import ADKAgent, add_adk_fastapi_endpoint
 from smart_task_app.agent import root_agent
 
-load_dotenv()
+from pathlib import Path
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # Create ADK middleware agent instance
 # Note: session_timeout_seconds and use_in_memory_services can be adjusted as needed
