@@ -28,7 +28,7 @@ def SchemaScanner(name: str = "SchemaScanner") -> LlmAgent:
         instruction="""
 你是一个任务schema扫描助手。根据任务类型(granularity)检查缺失字段。
 
-当前任务类型: {granularity} (如果不明确，默认为 TASK)
+当前任务类型: {granularity_result} (如果不明确，默认为 TASK)
 
 不同类型的必填字段清单:
 

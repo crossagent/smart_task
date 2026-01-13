@@ -19,6 +19,39 @@ def write_task_to_db(task_data: str) -> str:
     return task_id
 
 
+from google.adk.agents.readonly_context import ReadonlyContext
+
+def fulfillment_instruction(context: ReadonlyContext) -> str:
+    basic_info = context.session.state.get("basic_info", "None")
+    scan_result = context.session.state.get("scan_result", "None")
+    clarification = context.session.state.get("clarification", "None")
+    project_suggestion = context.session.state.get("project_suggestion", "None")
+    due_date_suggestion = context.session.state.get("due_date_suggestion", "None")
+    priority_suggestion = context.session.state.get("priority_suggestion", "None")
+    
+    return f"""
+你是一个任务创建完成助手。根据澄清结果决定是否可以创建任务。
+
+可用信息:
+- 基本信息: {basic_info}
+- 扫描结果: {scan_result}
+- 澄清结果: {clarification}
+- 推断结果: {project_suggestion}, {due_date_suggestion}, {priority_suggestion}
+
+你的任务:
+1. 检查上面 澄清结果 里的 need_clarification 字段
+2. 如果 need_clarification 为 false (或 Missing):
+   - 汇总所有已有字段和推断的高置信度字段
+   - 构建完整的task_data字典
+   - 调用 write_task_to_db 工具创建任务
+   - 告诉用户任务已成功创建
+3. 如果 need_clarification 为 true:
+   - 向用户输出 clarification.questions 中的问题
+   - 不要调用工具
+
+请用自然语言回复用户,告知结果或提出问题。
+"""
+
 def Fulfillment(name: str = "Fulfillment") -> LlmAgent:
     """
     Fulfillment Agent - 完成任务创建
@@ -34,28 +67,7 @@ def Fulfillment(name: str = "Fulfillment") -> LlmAgent:
         name=name,
         model="gemini-2.0-flash",
         description="完成任务创建的Agent",
-        instruction="""
-你是一个任务创建完成助手。根据澄清结果决定是否可以创建任务。
-
-可用信息:
-- 基本信息: {basic_info}
-- 扫描结果: {scan_result}
-- 澄清结果: {clarification}
-- 推断结果: {project_suggestion}, {due_date_suggestion}, {priority_suggestion}
-
-你的任务:
-1. 检查 {clarification} 中的 need_clarification 字段
-2. 如果 need_clarification 为 false:
-   - 汇总所有已有字段和推断的高置信度字段
-   - 构建完整的task_data字典
-   - 调用 write_task_to_db 工具创建任务
-   - 告诉用户任务已成功创建
-3. 如果 need_clarification 为 true:
-   - 向用户输出 clarification.questions 中的问题
-   - 不要调用工具
-
-请用自然语言回复用户,告知结果或提出问题。
-""",
+        instruction=fulfillment_instruction,
         tools=[write_task_to_db]
         # 注意: 不能同时设置output_schema和tools,所以这里只用tools
     )

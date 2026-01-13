@@ -18,14 +18,14 @@ from .fulfillment import Fulfillment
 
 # --- Artifact Tools (Standalone Functions) ---
 
-def read_task_artifact(context: ToolContext) -> str:
+def read_task_artifact(tool_context: ToolContext) -> str:
     """Reads the content of the 'task.md' artifact."""
-    content = context.session.state.get("task_md_content", "")
+    content = tool_context.session.state.get("task_md_content", "")
     return content if content else "(Artifact is empty)"
 
-def update_task_artifact(context: ToolContext, content: str) -> str:
+def update_task_artifact(tool_context: ToolContext, content: str) -> str:
     """Updates (overwrites) the 'task.md' artifact with new markdown content."""
-    context.session.state["task_md_content"] = content
+    tool_context.session.state["task_md_content"] = content
     try:
         # Simulate saving to ADK Artifacts
         pass 
