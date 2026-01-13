@@ -36,7 +36,7 @@ This design makes the agent a considerate partner, not just a dumb tool. You can
 Here is the proposed directory structure incorporating this design:
 
 ```
-agents/
+smart_task_app/
 ├── __init__.py
 ├── dispatcher_agent.py         # 1. Dispatcher: Recognizes intent (e.g., add_task) and routes to the correct workflow.
 |

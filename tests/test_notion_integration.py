@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
-from agents.tools.notion import query_database, add_task_to_database, get_database_schema
+from smart_task_app.tools.notion import query_database, add_task_to_database, get_database_schema
 
 def test_notion_integration():
     print("=== Testing Notion Integration ===")

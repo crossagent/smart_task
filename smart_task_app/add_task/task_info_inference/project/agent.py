@@ -3,7 +3,7 @@ from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.genai import types
 from pydantic import BaseModel, Field
-from agents.tools import notion
+from smart_task_app.tools import notion
 
 class ProjectSuggestion(BaseModel):
     """项目推荐结果"""

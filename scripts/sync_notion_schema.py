@@ -13,7 +13,7 @@ NOTION_API_KEY = os.environ.get("NOTION_API_KEY")
 NOTION_PROJECT_DATABASE_ID = os.environ.get("NOTION_PROJECT_DATABASE_ID")
 NOTION_TASK_DATABASE_ID = os.environ.get("NOTION_TASK_DATABASE_ID")
 
-OUTPUT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agents', 'data', 'notion_schema.json')
+OUTPUT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'smart_task_app', 'data', 'notion_schema.json')
 
 def get_database_properties(client, database_id):
     """Retrieves and simplifies properties from a Notion database."""

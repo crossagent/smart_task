@@ -4,7 +4,7 @@ For ADK web debugging, use: adk web .
 """
 
 import asyncio
-from agents.main import main
+from smart_task_app.main import main
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -19,7 +19,7 @@ USER_TIMEZONE = timezone(timedelta(hours=8))
 #
 # 要点：
 # - package_logger 是为顶层包名（这里使用 'smart_task'）配置的 logger，
-#   所有以该包名为前缀的子模块（例如 'smart_task.agents.agent'）都会继承
+#   所有以该包名为前缀的子模块（例如 'smart_task.smart_task_app.agent'）都会继承
 #   这个配置（level、handler 等）。
 # - 为避免重复输出，我们将 package_logger.propagate 设为 False，
 #   并在 package_logger 没有 handler 时添加一个 StreamHandler。
@@ -29,7 +29,7 @@ USER_TIMEZONE = timezone(timedelta(hours=8))
 #
 # 使用方法（在其它文件中）：
 # - 直接导入共享的 logger：
-#     from agents.shared_libraries.constants import logger
+#     from smart_task_app.shared_libraries.constants import logger
 #   或（相对导入，若在同包内）：
 #     from .shared_libraries.constants import logger
 #
