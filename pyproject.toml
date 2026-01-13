@@ -7,4 +7,10 @@ requires-python = ">=3.13"
 dependencies = [
     "google-adk[eval]>=1.12.0",
     "notion-client",
+    "fastapi",
+    "uvicorn[standard]",
+    "python-dotenv",
+    "ag-ui-adk",
+    "pydantic",
+    "google-genai",
 ]
