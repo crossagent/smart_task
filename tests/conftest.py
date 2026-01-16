@@ -50,3 +50,25 @@ def mock_notion_writes(monkeypatch):
         self.pages.create.return_value = {"id": "mock_safe_test_id"}
         
     monkeypatch.setattr(notion_client.Client, "__init__", safe_init)
+
+
+@pytest.fixture(autouse=True)
+def configure_agents_mock_model():
+    """
+    Force all agents to use the mock model for testing.
+    This overrides any hardcoded 'gemini-2.5-flash' in the agent definitions.
+    """
+    from smart_task_app.new_task.agent import new_task_agent
+    from smart_task_app.new_task.project_context.agent import project_context_agent
+    from smart_task_app.new_task.task_context.agent import task_context_agent
+    from smart_task_app.new_task.subtask_context.agent import subtask_context_agent
+    
+    agents = [
+        new_task_agent,
+        project_context_agent,
+        task_context_agent,
+        subtask_context_agent
+    ]
+    
+    for agent in agents:
+        agent.model = "mock/pytest"
