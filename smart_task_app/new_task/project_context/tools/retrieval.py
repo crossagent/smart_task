@@ -36,3 +36,30 @@ def get_project_context(project_id: str) -> str:
     # But let's stick to what we have.
     # If the agent knows the ID, it likely came from search.
     return f"Context for Project {project_id}: [Fetched details]"
+
+
+def get_project_outline() -> str:
+    """
+    Get a lightweight outline of all active projects.
+    Returns: JSON string list of {id, name, status, due}.
+    """
+    # In a real impl, this would query Notion with specific property filter
+    # For now, we reuse search_projects with empty query or specific filter
+    # But ensuring we only return specific fields.
+    
+    try:
+        results_str = search_projects("")
+        results = json.loads(results_str)
+        
+        outline = []
+        if isinstance(results, list):
+            for p in results:
+                outline.append({
+                    "id": p.get("id"),
+                    "name": p.get("title"),
+                    "status": p.get("status"),
+                    "due": p.get("due")
+                })
+        return json.dumps(outline)
+    except Exception:
+        return json.dumps([])
