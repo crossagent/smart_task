@@ -7,7 +7,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from ag_ui_adk import ADKAgent, add_adk_fastapi_endpoint
-from smart_task_app.agent import root_agent
+from smart_task_app.root_agent.agent import agent as root_agent
 
 from pathlib import Path
 env_path = Path(__file__).parent / '.env'

@@ -43,7 +43,7 @@ def orchestrator_instruction() -> str:
     Your job is to manage the flow of creating new items in the system.
     
     CURRENT PROJECTS (Outline):
-    {project_context}
+    (See context state)
     
     HIERARCHY:
     1. **Project** (Top level, Goal-oriented)
@@ -86,7 +86,7 @@ new_task_agent = LlmAgent(
     name="AddTaskOrchestrator",
     model="gemini-2.5-flash",
     description="Orchestrator for adding new Projects or Tasks.",
-    instruction=orchestrator_instruction,
+    instruction=orchestrator_instruction(),
     before_agent_callback=load_project_context,
     tools=[
         project_agent_tool,

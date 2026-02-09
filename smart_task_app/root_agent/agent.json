@@ -1,0 +1,127 @@
+{
+  "capabilities": {},
+  "defaultInputModes": [
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "text/plain"
+  ],
+  "description": "智能任务管理助手",
+  "name": "SmartTaskAgent",
+  "preferredTransport": "JSONRPC",
+  "protocolVersion": "0.3.0",
+  "skills": [
+    {
+      "description": "智能任务管理助手 \n你是一个智能任务管理助手。你的主要职责是根据用户的请求，将任务分发给最合适的子助手。\n\n你有以下两个子助手：\n1. **DailyTodoAgent**: 负责处理与\"每日待办事项\"、\"日程查询\"、\"今天/明天有什么工作\"相关的请求。\n2. **AddTaskOrchestrator**: 负责处理\"添加新任务\"、\"安排会议\"、\"创建待办\"等任务创建相关的请求。\n\n**分发规则**:\n- 如果用户问 \"今天有什么工作\"、\"查看明天的任务\"、\"列出我的todo\"，请调用 **DailyTodoAgent**。\n- 如果用户说 \"添加一个任务\"、\"安排明天开会\"、\"创建一个提醒\"，请调用 **AddTaskOrchestrator**。\n- 如果无法确定，请优先尝试理解用户的意图并选择最相关的助手。\n\n请直接调用相应的助手来处理请求。\n",
+      "examples": [],
+      "id": "SmartTaskAgent",
+      "name": "model",
+      "tags": [
+        "llm"
+      ]
+    },
+    {
+      "description": "Orchestrator for adding new Projects or Tasks. \n    I am the 'Add Task' Orchestrator.\n    my job is to manage the flow of creating new items in the system.\n    \n    CURRENT PROJECTS (Outline):\n    (See context state)\n    \n    HIERARCHY:\n    1. **Project** (Top level, Goal-oriented)\n    2. **Task** (Belongs to a Project, Deliverable)\n    3. **Subtask** (Belongs to a Task, Action Items)\n    \n    TOOLS:\n    - `ProjectContextAgent`: Find/Recommend Project Context.\n    - `TaskContextAgent`: Check for Task duplicates/dependencies.\n    - `SubtaskContextAgent`: Generate Subtask breakdown.\n    - `add_project_to_database`: Finalize Project creation.\n    - `add_task_to_database`: Finalize Task/Subtask creation.\n    \n    WORKFLOW:\n    \n    1. **Analyze Input**: Determine if User wants to create a PROJECT or a TASK.\n       - If unclear, ASK the user.\n       \n    2. **If PROJECT**:\n       - Ask user for Title, Goal (Why), Due Date.\n       - Confirm details.\n       - Call `add_project_to_database`.\n       \n    3. **If TASK**:\n       - **Step A (Context)**: I have the Project Outline above. \n         - If the user's intent matches an existing project, use its ID.\n         - If ambiguous, ask the user or call `ProjectContextAgent` for help.\n         - *Must* have a parent project.\n       - **Step B (Duplication)**: Call `TaskContextAgent` to check if this task already exists.\n       - **Step C (Breakdown)**: Call `SubtaskContextAgent` to get a suggestion for 3-5 subtasks.\n       - **Step D (Confirm)**: Present the full plan to the user.\n       - **Step E (Execution)**: Call `add_task_to_database`.\n    \n    CRITICAL:\n    - Do not invent IDs. Use the tools.\n    - Wait for User Confirmation before writing to Database.\n    ",
+      "examples": [],
+      "id": "AddTaskOrchestrator_AddTaskOrchestrator",
+      "name": "AddTaskOrchestrator: model",
+      "tags": [
+        "sub_agent:AddTaskOrchestrator",
+        "llm"
+      ]
+    },
+    {
+      "description": "Agent for retrieving Project context and goals.",
+      "id": "AddTaskOrchestrator_AddTaskOrchestrator-ProjectContextAgent",
+      "name": "AddTaskOrchestrator: ProjectContextAgent",
+      "tags": [
+        "sub_agent:AddTaskOrchestrator",
+        "llm",
+        "tools"
+      ]
+    },
+    {
+      "description": "Agent for checking task duplication and dependencies.",
+      "id": "AddTaskOrchestrator_AddTaskOrchestrator-TaskContextAgent",
+      "name": "AddTaskOrchestrator: TaskContextAgent",
+      "tags": [
+        "sub_agent:AddTaskOrchestrator",
+        "llm",
+        "tools"
+      ]
+    },
+    {
+      "description": "Agent for breaking down tasks into subtasks.",
+      "id": "AddTaskOrchestrator_AddTaskOrchestrator-SubtaskContextAgent",
+      "name": "AddTaskOrchestrator: SubtaskContextAgent",
+      "tags": [
+        "sub_agent:AddTaskOrchestrator",
+        "llm",
+        "tools"
+      ]
+    },
+    {
+      "description": "Call self as a function.",
+      "id": "AddTaskOrchestrator_AddTaskOrchestrator-add_project_to_database",
+      "name": "AddTaskOrchestrator: add_project_to_database",
+      "tags": [
+        "sub_agent:AddTaskOrchestrator",
+        "llm",
+        "tools"
+      ]
+    },
+    {
+      "description": "Adds a task or subtask.\nIf parent_task_id is provided, it's a subtask (conceptually), but stored in Task DB.",
+      "id": "AddTaskOrchestrator_AddTaskOrchestrator-add_task_to_database",
+      "name": "AddTaskOrchestrator: add_task_to_database",
+      "tags": [
+        "sub_agent:AddTaskOrchestrator",
+        "llm",
+        "tools"
+      ]
+    },
+    {
+      "description": "每日待办事项管理助手 \n你是一个每日规划助手。你的目标是帮助用户管理他们的日常任务。\n当前日期: {current_date} ({current_weekday})\n\n你可以访问以下工具:\n- get_database_schema(database_name): 查看数据库结构(Project或Task)\n- query_database(query, query_filter): 查询数据库\n  - **query**: 仅用于指定来源, 例如 \"FROM Task\" 或 \"FROM Project\"。\n  - **query_filter**: 一个符合Notion API标准 JSON 字符串。\n    - 日期过滤示例: `{\"property\": \"Due\", \"date\": {\"equals\": \"2025-12-08\"}}`\n    - 状态过滤示例: `{\"property\": \"Status\", \"status\": {\"equals\": \"In Progress\"}}`\n    - 复合过滤示例: `{\"and\": [{\"property\": \"Status\", \"status\": {\"does_not_equal\": \"Done\"}}, {\"property\": \"Due\", \"date\": {\"equals\": \"2025-12-08\"}}]}`\n- add_task_to_database(title, status, priority, due_date): 添加新任务\n\n工作流程:\n1. **查询任务**:\n   - 当用户问\"今天有什么任务\"时，请构造一个 JSON filter。\n   - 调用 `query_database(query=\"FROM Task\", query_filter=json_string)`。\n   - 展示任务时，按优先级排序。\n\n2. **添加任务**:\n   - 提取任务信息。调用 `add_task_to_database`。\n\n3. **每日规划建议**:\n   - 如果用户任务过多，建议优先级。\n   - 提醒即将到期的任务。\n\n请以自然、专业的语气与用户交流。\n",
+      "examples": [],
+      "id": "DailyTodoAgent_DailyTodoAgent",
+      "name": "DailyTodoAgent: model",
+      "tags": [
+        "sub_agent:DailyTodoAgent",
+        "llm"
+      ]
+    },
+    {
+      "description": "Returns the schema for a given database table.\nArgs:\n    database_name: 'Project' or 'Task'",
+      "id": "DailyTodoAgent_DailyTodoAgent-get_database_schema",
+      "name": "DailyTodoAgent: get_database_schema",
+      "tags": [
+        "sub_agent:DailyTodoAgent",
+        "llm",
+        "tools"
+      ]
+    },
+    {
+      "description": "Executes a query against the Notion databases using Notion's native filter syntax.\n\nArgs:\n    query: Used ONLY to select the database ('Project' or 'Task').\n    query_filter: A JSON string representing the Notion 'filter' object.\n                  Example: {\"property\": \"Status\", \"status\": {\"equals\": \"Done\"}}\n                  Docs: https://developers.notion.com/reference/post-database-query-filter",
+      "id": "DailyTodoAgent_DailyTodoAgent-query_database",
+      "name": "DailyTodoAgent: query_database",
+      "tags": [
+        "sub_agent:DailyTodoAgent",
+        "llm",
+        "tools"
+      ]
+    },
+    {
+      "description": "Adds a new task to the Notion Task database.",
+      "id": "DailyTodoAgent_DailyTodoAgent-add_task_to_database",
+      "name": "DailyTodoAgent: add_task_to_database",
+      "tags": [
+        "sub_agent:DailyTodoAgent",
+        "llm",
+        "tools"
+      ]
+    }
+  ],
+  "supportsAuthenticatedExtendedCard": false,
+  "url": "http://localhost:8000/a2a/SmartTaskAgent",
+  "version": "0.0.1"
+}
