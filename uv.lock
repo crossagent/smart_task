@@ -7,6 +7,22 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "a2a-sdk"
+version = "0.3.22"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core" },
+    { name = "httpx" },
+    { name = "httpx-sse" },
+    { name = "protobuf" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/92/a3/76f2d94a32a1b0dc760432d893a09ec5ed31de5ad51b1ef0f9d199ceb260/a2a_sdk-0.3.22.tar.gz", hash = "sha256:77a5694bfc4f26679c11b70c7f1062522206d430b34bc1215cfbb1eba67b7e7d", size = 231535 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/e8/f4e39fd1cf0b3c4537b974637143f3ebfe1158dad7232d9eef15666a81ba/a2a_sdk-0.3.22-py3-none-any.whl", hash = "sha256:b98701135bb90b0ff85d35f31533b6b7a299bf810658c1c65f3814a6c15ea385", size = 144347 },
+]
+
+[[package]]
 name = "absl-py"
 version = "2.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -537,6 +553,9 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+a2a = [
+    { name = "a2a-sdk" },
+]
 eval = [
     { name = "google-cloud-aiplatform", extra = ["evaluation"] },
     { name = "pandas" },
@@ -2445,7 +2464,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "ag-ui-adk" },
     { name = "fastapi" },
-    { name = "google-adk", extra = ["eval"] },
+    { name = "google-adk", extra = ["a2a", "eval"] },
     { name = "google-genai" },
     { name = "notion-client" },
     { name = "pydantic" },
@@ -2457,7 +2476,7 @@ dependencies = [
 requires-dist = [
     { name = "ag-ui-adk" },
     { name = "fastapi" },
-    { name = "google-adk", extras = ["eval"], specifier = ">=1.12.0" },
+    { name = "google-adk", extras = ["a2a", "eval"], specifier = ">=1.12.0" },
     { name = "google-genai" },
     { name = "notion-client" },
     { name = "pydantic" },
