@@ -2,17 +2,8 @@ from google.adk.agents import LlmAgent
 from smart_task_app.tools.notion import get_database_schema, query_database, add_task_to_database
 from smart_task_app.daily_todo.callbacks import inject_current_time
 
-def DailyTodoAgent(name: str = "DailyTodoAgent") -> LlmAgent:
-    """
-    DailyTodoAgent - 每日待办事项管理助手
-    
-    职责:
-    - 查询Notion中的待办事项
-    - 添加新任务到Notion
-    - 协助用户进行每日规划
-    """
-    return LlmAgent(
-        name=name,
+daily_todo_agent = LlmAgent(
+        name="DailyTodoAgent",
         model="gemini-2.5-flash",
         description="每日待办事项管理助手",
         instruction="""
@@ -47,5 +38,3 @@ def DailyTodoAgent(name: str = "DailyTodoAgent") -> LlmAgent:
         tools=[get_database_schema, query_database, add_task_to_database],
         before_agent_callback=[inject_current_time]
     )
-
-daily_todo_agent = DailyTodoAgent()
