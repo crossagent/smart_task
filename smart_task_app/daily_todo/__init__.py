@@ -1,1 +1,1 @@
-from .agent import DailyTodoAgent, daily_todo_agent as agent
+from .agent import daily_todo_agent as agent
