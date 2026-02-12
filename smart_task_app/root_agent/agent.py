@@ -73,4 +73,4 @@ def create_root_agent():
         sub_agents=sub_agents
     )
 
-agent = create_root_agent()
+root_agent = create_root_agent()
