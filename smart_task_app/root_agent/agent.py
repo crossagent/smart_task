@@ -1,58 +1,13 @@
 import os
 import sys
 from google.adk.agents import LlmAgent
+from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
 
-# Try to import local agents
-try:
-    from smart_task_app.new_task.agent import new_task_agent
-except ImportError:
-    new_task_agent = None
+from smart_task_app.new_task.agent import new_task_agent
+from smart_task_app.daily_todo.agent import daily_todo_agent
 
-try:
-    from smart_task_app.daily_todo.agent import daily_todo_agent
-except ImportError:
-    daily_todo_agent = None
 
-# Try to import RemoteA2aAgent (available in newer ADK versions)
-try:
-    from google.adk.a2a.agents import RemoteA2aAgent
-except ImportError:
-    RemoteA2aAgent = None
-
-def create_root_agent():
-    sub_agents = []
-    
-    # Mode A: A2A (via Environment Variable)
-    if os.getenv("ENABLE_A2A") == "true":
-        print("Using A2A Remote Connection")
-        if not RemoteA2aAgent:
-             raise ImportError("RemoteA2aAgent not found in google.adk.a2a.agents")
-             
-        sub_agents = [
-            RemoteA2aAgent(
-                name="AddTaskOrchestrator", 
-                url="http://localhost:8000/a2a/AddTaskOrchestrator" 
-            ),
-            RemoteA2aAgent(
-                name="DailyTodoAgent", 
-                url="http://localhost:8000/a2a/DailyTodoAgent" 
-            )
-        ]
-        
-    # Mode B: Local Import
-    else:
-        print("Using Local Import Connection")
-        if new_task_agent:
-            sub_agents.append(new_task_agent)
-        else:
-            print("Warning: new_task_agent not found locally")
-            
-        if daily_todo_agent:
-            sub_agents.append(daily_todo_agent)
-        else:
-            print("Warning: daily_todo_agent not found locally")
-
-    return LlmAgent(
+root_agent = LlmAgent(
         name="SmartTaskAgent",
         model="gemini-2.5-flash",
         description="智能任务管理助手",
@@ -70,7 +25,14 @@ def create_root_agent():
 
 请直接调用相应的助手来处理请求。
 """,
-        sub_agents=sub_agents
+        sub_agents=[
+            RemoteA2aAgent(
+                name="AddTaskOrchestrator", 
+                url="http://localhost:8000/a2a/AddTaskOrchestrator" 
+            ),
+            RemoteA2aAgent(
+                name="DailyTodoAgent", 
+                url="http://localhost:8000/a2a/DailyTodoAgent" 
+            )
+        ]
     )
-
-root_agent = create_root_agent()
