@@ -1,10 +1,9 @@
 import os
 import sys
 from google.adk.agents import LlmAgent
-from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
+from google.adk.agents.remote_a2a_agent import RemoteA2aAgent, AGENT_CARD_WELL_KNOWN_PATH
 
-from smart_task_app.new_task.agent import new_task_agent
-from smart_task_app.daily_todo.agent import daily_todo_agent
+
 
 
 root_agent = LlmAgent(
@@ -28,11 +27,11 @@ root_agent = LlmAgent(
         sub_agents=[
             RemoteA2aAgent(
                 name="AddTaskOrchestrator", 
-                url="http://localhost:8000/a2a/AddTaskOrchestrator" 
+                agent_card=f"http://localhost:8000/a2a/new_task/{AGENT_CARD_WELL_KNOWN_PATH}"
             ),
             RemoteA2aAgent(
                 name="DailyTodoAgent", 
-                url="http://localhost:8000/a2a/DailyTodoAgent" 
+                agent_card=f"http://localhost:8000/a2a/daily_todo/{AGENT_CARD_WELL_KNOWN_PATH}"
             )
         ]
     )
