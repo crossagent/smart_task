@@ -33,8 +33,17 @@ AGENTS = [
 async def generate_card(agent, rel_path):
     print(f"Generating card for {agent.name}...")
     
+    # Determine the "app name" (directory name) from the path
+    # rel_path is like "smart_task_app/remote_a2a/new_task/agent.json"
+    # We want "new_task"
+    parts = rel_path.split("/")
+    if len(parts) >= 2:
+        app_name = parts[-2]
+    else:
+        app_name = agent.name # Fallback or root
+
     # Construct RPC URL (assuming standard A2A pattern)
-    rpc_url = f"http://localhost:8000/a2a/{agent.name}"
+    rpc_url = f"http://localhost:8000/a2a/{app_name}"
     
     builder = AgentCardBuilder(
         agent=agent,
