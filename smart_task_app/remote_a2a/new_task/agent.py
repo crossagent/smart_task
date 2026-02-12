@@ -82,7 +82,7 @@ def orchestrator_instruction() -> str:
     - Wait for User Confirmation before writing to Database.
     """
 
-new_task_agent = LlmAgent(
+root_agent = LlmAgent(
     name="AddTaskOrchestrator",
     model="gemini-2.5-flash",
     description="Orchestrator for adding new Projects or Tasks.",
@@ -96,3 +96,5 @@ new_task_agent = LlmAgent(
         add_task_to_database
     ]
 )
+
+

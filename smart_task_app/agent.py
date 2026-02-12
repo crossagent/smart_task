@@ -3,9 +3,6 @@ import sys
 from google.adk.agents import LlmAgent
 from google.adk.agents.remote_a2a_agent import RemoteA2aAgent, AGENT_CARD_WELL_KNOWN_PATH
 
-
-
-
 root_agent = LlmAgent(
         name="SmartTaskAgent",
         model="gemini-2.5-flash",

@@ -17,17 +17,17 @@ except ImportError:
 # Import Agent Instances
 import traceback
 try:
-    from smart_task_app.root_agent.agent import agent as root_agent
-    from smart_task_app.new_task.agent import new_task_agent
-    from smart_task_app.daily_todo.agent import daily_todo_agent
+    from smart_task_app.agent import root_agent as main_root_agent
+    from smart_task_app.remote_a2a.new_task.agent import root_agent as new_task_agent
+    from smart_task_app.remote_a2a.daily_todo.agent import root_agent as daily_todo_agent
 except Exception:
     traceback.print_exc()
     sys.exit(1)
 
 AGENTS = [
-    (root_agent, "smart_task_app/root_agent/agent.json"),
-    (new_task_agent, "smart_task_app/new_task/agent.json"),
-    (daily_todo_agent, "smart_task_app/daily_todo/agent.json"),
+    (main_root_agent, "smart_task_app/agent.json"),
+    (new_task_agent, "smart_task_app/remote_a2a/new_task/agent.json"),
+    (daily_todo_agent, "smart_task_app/remote_a2a/daily_todo/agent.json"),
 ]
 
 async def generate_card(agent, rel_path):

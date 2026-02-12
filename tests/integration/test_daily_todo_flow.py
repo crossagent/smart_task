@@ -2,7 +2,7 @@
 import pytest
 from tests.test_core.test_client import AgentTestClient
 from tests.test_core.mock_llm import MockLlm
-from smart_task_app.daily_todo.agent import daily_todo_agent
+from smart_task_app.remote_a2a.daily_todo.agent import root_agent as daily_todo_agent
 
 @pytest.fixture
 async def daily_todo_client():
