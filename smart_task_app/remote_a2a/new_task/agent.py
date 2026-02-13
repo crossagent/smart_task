@@ -5,9 +5,8 @@ from google.adk.tools import AgentTool
 from google.genai import types
 from google.adk.agents.readonly_context import ReadonlyContext
 
-# Import retrieval tools directly
-from .project_context.tools.retrieval import get_project_outline, search_projects
-from .task_context.tools.retrieval import search_tasks
+# Import retrieval tools (consolidated into tools/retrieval.py)
+from .tools.retrieval import get_project_outline, search_projects, search_tasks
 
 # Import Notion Tools
 from .tools.notion import add_task_to_database, add_project_to_database, update_task, update_project
