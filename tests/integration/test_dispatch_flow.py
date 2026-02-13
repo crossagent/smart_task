@@ -16,13 +16,13 @@ async def test_smart_task_dispatch(smart_task_client):
     Verifies routing to specific sub-agents.
     """
     MockLlm.set_behaviors({
-        "add a task": {
-            "tool": "run_addtaskworkflow",
-            "args": {}
+        "今天有什么工作": {
+            "tool": "DailyTodoAgent",
+            "args": {"instruction": "今天有什么工作"}
         }
     })
     
     await smart_task_client.create_new_session("user_test", "sess_dispatch_1")
-    responses = await smart_task_client.chat("I want to add a task")
+    responses = await smart_task_client.chat("今天有什么工作")
     
     pass

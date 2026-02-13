@@ -1,5 +1,5 @@
 import json
-from smart_task_app.new_task.tools.notion import query_database
+from smart_task_app.remote_a2a.new_task.tools.notion import query_database
 
 def search_tasks(query: str) -> str:
     """
