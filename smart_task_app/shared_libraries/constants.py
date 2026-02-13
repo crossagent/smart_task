@@ -7,7 +7,7 @@ from datetime import timezone, timedelta
 # ... (您的 MODEL 相关代码保持不变) ...
 MODEL = os.getenv("GOOGLE_GENAI_MODEL")
 if not MODEL:
-    MODEL = "gemini-3.0-flash"
+    MODEL = "gemini-3-flash-preview"
 
 USER_TIMEZONE = timezone(timedelta(hours=8))
 
