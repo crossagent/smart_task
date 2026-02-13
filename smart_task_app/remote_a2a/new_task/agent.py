@@ -3,22 +3,14 @@ from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.tools import AgentTool
 from google.genai import types
+from google.adk.agents.readonly_context import ReadonlyContext
 
-# Import Sub-Agents
-from .project_context.agent import project_context_agent
-from .task_context.agent import task_context_agent
-from .subtask_context.agent import subtask_context_agent
+# Import retrieval tools directly
+from .project_context.tools.retrieval import get_project_outline, search_projects
+from .task_context.tools.retrieval import search_tasks
 
 # Import Notion Tools
-from .tools.notion import add_task_to_database, add_project_to_database
-
-# Import retrieval tool
-from .project_context.tools.retrieval import get_project_outline
-
-# Wrap Agents as Tools
-project_agent_tool = AgentTool(project_context_agent)
-task_agent_tool = AgentTool(task_context_agent)
-subtask_agent_tool = AgentTool(subtask_context_agent)
+from .tools.notion import add_task_to_database, add_project_to_database, update_task, update_project
 
 def load_project_context(callback_context: CallbackContext) -> Optional[types.Content]:
     """
@@ -34,7 +26,7 @@ def load_project_context(callback_context: CallbackContext) -> Optional[types.Co
         callback_context.state["project_context"] = "[]"
     return None
 
-def orchestrator_instruction() -> str:
+def orchestrator_instruction(context: ReadonlyContext = None) -> str:
     """
     Dynamic instruction that includes Project Context from state.
     """
@@ -66,65 +58,69 @@ def orchestrator_instruction() -> str:
        - **Example**: "Fix typo on contact page", "Run database migration".
 
     TOOLS:
-    - `ProjectContextAgent`: Find/Recommend Project Context.
-    - `TaskContextAgent`: Check for Task duplicates/dependencies.
-    - `SubtaskContextAgent`: Generate Subtask breakdown.
-    - `add_project_to_database`: Finalize Project creation.
-    - `add_task_to_database`: Finalize Task/Subtask creation.
+    - `search_projects(query)`: Search for existing projects.
+    - `search_tasks(query, project_id)`: Search for existing tasks. **MUST** provide `project_id` to scope search.
+    - `add_project_to_database`: Create a NEW Project.
+    - `update_project`: Update an EXISTING Project.
+    - `add_task_to_database`: Create a NEW Task/Subtask.
+    - `update_task`: Update an EXISTING Task/Subtask.
 
-    WORKFLOW:
+    WORKFLOW - CONTEXT ASSEMBLY (Search -> Check -> Upsert):
 
-    1. **ANALYZE & CATEGORIZE**:
-       - Analyze the user's input based on the HIERARCHY definitions above.
-       - Decide if it is likely a **PROJECT**, **TASK**, or **SUBTASK**.
+    1. **ANALYZE**: Determine if the user input is a **PROJECT**, **TASK**, or **SUBTASK**.
+
+    2. **ASSEMBLE & CHECK**:
        
-    2. **CONTEXT ASSEMBLY (Parallel & Proactive)**:
-       - Gather ALL necessary context to form a complete proposal *before* asking the user.
-       
-       - **If PROJECT**: Check for existing projects with similar names (avoid duplicates).
+       - **If PROJECT**:
+         1. Call `search_projects` with the name.
+         2. **Logic**:
+            - **Found Match?** -> Plan to **UPDATE** the existing project (using `update_project`).
+            - **No Match?** -> Plan to **CREATE** a new project (using `add_project_to_database`).
        
        - **If TASK**:
-         - **Goal**: Find a Parent Project, Check Duplicates, and Plan Subtasks.
-         - **Action**: Call the following tools IN PARALLEL:
-           1. `ProjectContextAgent`: "Find the best parent project for [Task Name]"
-           2. `TaskContextAgent`: "Check if [Task Name] already exists"
-           3. `SubtaskContextAgent`: "Suggest a breakdown for [Task Name]"
-           
+         1. Call `search_projects` to find the Parent Project ID. **CRITICAL**: You must have a Project ID.
+         2. Call `search_tasks(query, project_id=...)` using the ID found in step 1.
+         3. **Logic**:
+            - **Found Match?** -> Plan to **UPDATE** the existing task (using `update_task`).
+            - **No Match?** -> Plan to **CREATE** a new task (using `add_task_to_database`).
+            - *Internal Step*: Generate 3-5 subtasks to help the user.
+            
        - **If SUBTASK**:
-         - **Goal**: Find a Parent Task.
-         - **Action**: Call `TaskContextAgent` to find the parent task.
+         1. Call `search_tasks` (with project_id if known, or scope it) to find the Parent Task.
+         2. Check if this subtask text appears in the parent task's children/subtasks (if visible) or generic search.
+         3. **Logic**:
+            - **Found Match?** -> Plan to **UPDATE** (using `update_task`).
+            - **No Match?** -> Plan to **CREATE** (using `add_task_to_database` linked to parent).
 
-    3. **CONSULT & CONFIRM**:
-       - Present a **Complete Proposal** to the user.
-       - *Example (Task)*: 
-         "I suggest adding this as a **Task** under project **[Project Name]**. 
-          I've also drafted 3 subtasks to help you get started: [List]. 
-          Does this look right?"
-       - Get confirmation on Title, Parent, and Subtasks.
+    3. **CONSULT**:
+       - Present the **Complete Proposal** to the user.
+       - *Example (Update)*: "I found an existing task 'Buy Milk'. Do you want me to update its status or due date?"
+       - *Example (Create)*: "I suggest creating a new Task 'Buy Milk' under Project 'Life'. I've also drafted subtasks..."
+       - Get confirmation.
 
     4. **EXECUTE**:
-       - Once confirmed, call the appropriate tool:
-         - **Project**: `add_project_to_database`
-         - **Task/Subtask**: `add_task_to_database` (Create task first, then subtasks if applicable).
+       - Once confirmed, call the specific tool decided in Step 2 (Add or Update).
 
     CRITICAL:
-    - **Speed & Intelligence**: Don't ask one question at a time. Assemble the full picture (Project + Task + Subtasks) and present it for a single "Yes/No/Modify" decision.
+    - **Scoped Search**: NEVER search for tasks without a Project ID context if possible.
+    - **Upsert Logic**: Always prefer updating an existing item over creating a duplicate.
     - **Value the Hierarchy**: Ensure every Task has a Project, and every Subtask has a Task.
-    - **Wait for Confirmation**: Do not write to the database until the user confirms the plan.
+    - **Wait for Confirmation**: Do not write/update DB until confirmed.
     """
 
 root_agent = LlmAgent(
     name="AddTaskOrchestrator",
     model="gemini-2.5-flash",
     description="Orchestrator for adding new Projects or Tasks.",
-    instruction=orchestrator_instruction(),
+    instruction=orchestrator_instruction,
     before_agent_callback=load_project_context,
     tools=[
-        project_agent_tool,
-        task_agent_tool,
-        subtask_agent_tool,
+        search_projects,
+        search_tasks,
         add_project_to_database,
-        add_task_to_database
+        update_project,
+        add_task_to_database,
+        update_task
     ]
 )
 

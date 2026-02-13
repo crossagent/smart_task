@@ -207,3 +207,80 @@ def add_task_to_database(
         return response["id"]
     except Exception as e:
         return f"Error creating task: {str(e)}"
+
+def update_project(page_id: str, title: Optional[str] = None, status: Optional[str] = None, due_date: Optional[str] = None, goal: Optional[str] = None) -> str:
+    client = _get_notion_client()
+    if not client:
+        return "Error: Notion Config missing."
+
+    try:
+        properties = {}
+        if title:
+             properties["Name"] = {"title": [{"text": {"content": title}}]}
+        if status:
+             properties["Status"] = {"status": {"name": status}}
+        if goal:
+             properties["Goal"] = {"rich_text": [{"text": {"content": goal}}]}
+        if due_date:
+             properties["Due Date"] = {"date": {"start": due_date}}
+             
+        if not properties:
+            return "Error: No properties to update."
+
+        response = client.pages.update(
+            page_id=page_id,
+            properties=properties
+        )
+        return response["id"]
+    except Exception as e:
+        return f"Error updating project: {str(e)}"
+
+def update_task(
+    page_id: str,
+    title: Optional[str] = None, 
+    status: Optional[str] = None, 
+    priority: Optional[str] = None, 
+    due_date: Optional[str] = None,
+    parent_project_id: Optional[str] = None,
+    parent_task_id: Optional[str] = None
+) -> str:
+    client = _get_notion_client()
+    if not client or not NOTION_TASK_DATABASE_ID:
+        return "Error: Notion Config missing."
+    
+    # We need schema to map property names correctly
+    task_schema = NOTION_SCHEMA.get("Task", {})
+    title_prop = "Task name" if "Task name" in task_schema else "Name"
+    status_prop = "Status"
+    priority_prop = "Priority"
+    due_prop = "Due Date" if "Due Date" in task_schema else "Due"
+    project_rel_prop = "Project"
+    parent_task_prop = "Parent Task"
+
+    try:
+        properties = {}
+        if title:
+            properties[title_prop] = {"title": [{"text": {"content": title}}]}
+        if status:
+            properties[status_prop] = {"status": {"name": status}}
+        if priority:
+            properties[priority_prop] = {"select": {"name": priority}}
+        if due_date:
+            properties[due_prop] = {"date": {"start": due_date}}
+        
+        if parent_project_id:
+            properties[project_rel_prop] = {"relation": [{"id": parent_project_id}]}
+            
+        if parent_task_id:
+            properties[parent_task_prop] = {"relation": [{"id": parent_task_id}]}
+
+        if not properties:
+            return "Error: No properties to update."
+
+        response = client.pages.update(
+            page_id=page_id,
+            properties=properties
+        )
+        return response["id"]
+    except Exception as e:
+        return f"Error updating task: {str(e)}"
