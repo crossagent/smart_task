@@ -14,3 +14,8 @@ dependencies = [
     "pydantic",
     "google-genai",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

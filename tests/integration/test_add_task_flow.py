@@ -67,7 +67,7 @@ def mock_context_agents():
 
 
 @pytest.mark.anyio
-async def test_add_task_flow(add_task_client, mock_context_agents):
+async def test_add_task_flow(task_agent_client, mock_context_agents):
     """
     Test Case: AddTaskOrchestrator - Add Task Flow
     Verifies the interactions: Orchestrator -> Project/Task/Subtask Agents -> Notion.
@@ -103,9 +103,9 @@ async def test_add_task_flow(add_task_client, mock_context_agents):
         }
     })
     
-    await add_task_client.create_new_session("user_test", "sess_add_1")
+    await task_agent_client.create_new_session("user_test", "sess_add_1")
     # Trigger the flow
-    responses = await add_task_client.chat("Add a task to buy milk")
+    responses = await task_agent_client.chat("Add a task to buy milk")
     
     # We verify that standard response is returned
     assert len(responses) >= 0

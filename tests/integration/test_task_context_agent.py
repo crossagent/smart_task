@@ -1,7 +1,7 @@
 import pytest
 from tests.test_core.test_client import AgentTestClient
 from tests.test_core.mock_llm import MockLlm
-from smart_task_app.new_task.task_context.agent import task_context_agent
+from smart_task_app.remote_a2a.new_task.task_context.agent import task_context_agent
 
 @pytest.fixture
 async def task_client():

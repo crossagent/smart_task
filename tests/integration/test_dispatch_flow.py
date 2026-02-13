@@ -2,12 +2,12 @@
 import pytest
 from tests.test_core.test_client import AgentTestClient
 from tests.test_core.mock_llm import MockLlm
-from smart_task_app.agent import root_agent
+from smart_task_app.agent import app
 
 @pytest.fixture
 async def smart_task_client():
     """Client for SmartTaskAgent (Root)."""
-    return AgentTestClient(agent=root_agent, app_name="smart_task")
+    return AgentTestClient(agent=app.root_agent, app_name="smart_task")
 
 @pytest.mark.anyio
 async def test_smart_task_dispatch(smart_task_client):

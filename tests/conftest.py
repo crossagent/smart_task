@@ -157,3 +157,8 @@ def start_a2a_server():
     except subprocess.TimeoutExpired:
         proc.kill()
     log_file.close()
+
+@pytest.fixture
+def anyio_backend():
+    return 'asyncio'
+
