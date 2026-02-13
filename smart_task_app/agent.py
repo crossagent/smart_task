@@ -24,11 +24,11 @@ root_agent = LlmAgent(
         sub_agents=[
             RemoteA2aAgent(
                 name="AddTaskOrchestrator", 
-                agent_card=f"http://localhost:8000/a2a/new_task/{AGENT_CARD_WELL_KNOWN_PATH}"
+                agent_card=f"http://localhost:28001/a2a/new_task{AGENT_CARD_WELL_KNOWN_PATH}"
             ),
             RemoteA2aAgent(
                 name="DailyTodoAgent", 
-                agent_card=f"http://localhost:8000/a2a/daily_todo/{AGENT_CARD_WELL_KNOWN_PATH}"
+                agent_card=f"http://localhost:28001/a2a/daily_todo{AGENT_CARD_WELL_KNOWN_PATH}"
             )
         ]
     )

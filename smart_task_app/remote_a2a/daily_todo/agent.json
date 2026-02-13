@@ -49,6 +49,6 @@
     }
   ],
   "supportsAuthenticatedExtendedCard": false,
-  "url": "http://localhost:8000/a2a/daily_todo",
+  "url": "http://localhost:28001/a2a/daily_todo",
   "version": "0.0.1"
 }

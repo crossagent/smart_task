@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 from smart_task_app.tools.notion import get_database_schema, query_database, add_task_to_database
-from smart_task_app.daily_todo.callbacks import inject_current_time
+from smart_task_app.remote_a2a.daily_todo.callbacks import inject_current_time
 
 root_agent = LlmAgent(
         name="DailyTodoAgent",
