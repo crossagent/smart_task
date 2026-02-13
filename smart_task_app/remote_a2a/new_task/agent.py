@@ -4,6 +4,7 @@ from google.adk.agents.callback_context import CallbackContext
 from google.adk.tools import AgentTool
 from google.genai import types
 from google.adk.agents.readonly_context import ReadonlyContext
+from smart_task_app.shared_libraries.constants import MODEL
 
 # Import retrieval tools (consolidated into tools/retrieval.py)
 from .tools.retrieval import get_project_outline, search_projects, search_tasks
@@ -109,7 +110,7 @@ def orchestrator_instruction(context: ReadonlyContext = None) -> str:
 
 root_agent = LlmAgent(
     name="AddTaskOrchestrator",
-    model="gemini-2.5-flash",
+    model=MODEL,
     description="Orchestrator for adding new Projects or Tasks.",
     instruction=orchestrator_instruction,
     before_agent_callback=load_project_context,
