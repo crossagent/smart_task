@@ -51,9 +51,10 @@ def orchestrator_instruction(context: ReadonlyContext = None) -> str:
        - **Example**: "Fix typo on contact page", "Run database migration".
 
     TOOLS:
-    - Use `notion_query_database` to search.
-    - Use `notion_create_page` to add items.
-    - Use `notion_update_page` to update items.
+    - Use `API-query-data-source` to query specific databases (Projects/Tasks).
+    - Use `API-post-search` for global search if needed.
+    - Use `API-post-page` to create new items.
+    - Use `API-patch-page` to update item properties.
 
     WORKFLOW - CONTEXT ASSEMBLY:
 
@@ -62,25 +63,25 @@ def orchestrator_instruction(context: ReadonlyContext = None) -> str:
     2. **ASSEMBLE & CHECK**:
        
        - **If PROJECT**:
-         1. Query Project DB to check if it exists.
+         1. Search Project DB using `API-query-data-source` (arg: `data_source_id`).
          2. **Logic**:
-            - **Found Match?** -> Plan to **UPDATE**.
-            - **No Match?** -> Plan to **CREATE**.
+            - **Found Match?** -> Plan to **UPDATE** (`API-patch-page`).
+            - **No Match?** -> Plan to **CREATE** (`API-post-page`).
        
        - **If TASK**:
          1. Ensure you have a Project ID. If not, search Project DB.
-         2. Query Task DB for duplicates.
+         2. Search Task DB using `API-query-data-source` (arg: `data_source_id`).
          3. **Logic**:
-            - **Found Match?** -> Plan to **UPDATE**.
-            - **No Match?** -> Plan to **CREATE**.
+            - **Found Match?** -> Plan to **UPDATE** (`API-patch-page`).
+            - **No Match?** -> Plan to **CREATE** (`API-post-page`).
             - *Internal Step*: Generate 3-5 subtasks to help the user.
             
        - **If SUBTASK**:
          1. Find Parent Task.
          2. Check if this subtask exists.
          3. **Logic**:
-            - **Found Match?** -> Plan to **UPDATE**.
-            - **No Match?** -> Plan to **CREATE**.
+            - **Found Match?** -> Plan to **UPDATE** (`API-patch-page`).
+            - **No Match?** -> Plan to **CREATE** (`API-post-page`).
 
     3. **CONSULT**:
        - Present the **Complete Proposal** to the user.
