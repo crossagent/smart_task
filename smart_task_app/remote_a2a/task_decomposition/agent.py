@@ -7,24 +7,14 @@ from google.adk.agents.readonly_context import ReadonlyContext
 from smart_task_app.shared_libraries.constants import MODEL
 
 # Import retrieval tools (consolidated into tools/retrieval.py)
-from .tools.retrieval import get_project_outline, search_projects, search_tasks
+# Retrieval tools removed
 
-# Import Notion Tools
-from .tools.notion import add_task_to_database, add_project_to_database, update_task, update_project
 
-def load_project_context(callback_context: CallbackContext) -> Optional[types.Content]:
-    """
-    Callback to load Project Outline into state before agent runs.
-    """
-    try:
-        outline_str = get_project_outline()
-        # Store in state
-        callback_context.state["project_context"] = outline_str
-        print(f"[Callback] Loaded Project Context: {len(outline_str)} chars")
-    except Exception as e:
-        print(f"[Callback] Failed to load project context: {e}")
-        callback_context.state["project_context"] = "[]"
-    return None
+# Import Notion MCP Tool
+from smart_task_app.shared_libraries.notion_util import get_notion_mcp_tool
+
+# Imports removed
+
 
 def orchestrator_instruction(context: ReadonlyContext = None) -> str:
     """
@@ -34,8 +24,11 @@ def orchestrator_instruction(context: ReadonlyContext = None) -> str:
     You are the 'Task Decomposition' Agent.
     Your job is to manage the flow of creating new items in the system, ensuring they are placed at the correct level of granularity.
 
-    CURRENT PROJECTS (Outline):
-    (See context state)
+    You have access to Notion via MCP tools.
+    
+    CONFIGURATION:
+    - Project Database ID: `1990d59debb781c58d78c302dffea2b5`
+    - Task Database ID: `1990d59debb7816dab7bf83e93458d30`
 
     HIERARCHY & GRANULARITY:
     
@@ -58,69 +51,60 @@ def orchestrator_instruction(context: ReadonlyContext = None) -> str:
        - **Example**: "Fix typo on contact page", "Run database migration".
 
     TOOLS:
-    - `search_projects(query)`: Search for existing projects.
-    - `search_tasks(query, project_id)`: Search for existing tasks. **MUST** provide `project_id` to scope search.
-    - `add_project_to_database`: Create a NEW Project.
-    - `update_project`: Update an EXISTING Project.
-    - `add_task_to_database`: Create a NEW Task/Subtask.
-    - `update_task`: Update an EXISTING Task/Subtask.
+    - Use `notion_query_database` to search.
+    - Use `notion_create_page` to add items.
+    - Use `notion_update_page` to update items.
 
-    WORKFLOW - CONTEXT ASSEMBLY (Search -> Check -> Upsert):
+    WORKFLOW - CONTEXT ASSEMBLY:
 
     1. **ANALYZE**: Determine if the user input is a **PROJECT**, **TASK**, or **SUBTASK**.
 
     2. **ASSEMBLE & CHECK**:
        
        - **If PROJECT**:
-         1. Call `search_projects` with the name.
+         1. Query Project DB to check if it exists.
          2. **Logic**:
-            - **Found Match?** -> Plan to **UPDATE** the existing project (using `update_project`).
-            - **No Match?** -> Plan to **CREATE** a new project (using `add_project_to_database`).
+            - **Found Match?** -> Plan to **UPDATE**.
+            - **No Match?** -> Plan to **CREATE**.
        
        - **If TASK**:
-         1. Call `search_projects` to find the Parent Project ID. **CRITICAL**: You must have a Project ID.
-         2. Call `search_tasks(query, project_id=...)` using the ID found in step 1.
+         1. Ensure you have a Project ID. If not, search Project DB.
+         2. Query Task DB for duplicates.
          3. **Logic**:
-            - **Found Match?** -> Plan to **UPDATE** the existing task (using `update_task`).
-            - **No Match?** -> Plan to **CREATE** a new task (using `add_task_to_database`).
+            - **Found Match?** -> Plan to **UPDATE**.
+            - **No Match?** -> Plan to **CREATE**.
             - *Internal Step*: Generate 3-5 subtasks to help the user.
             
        - **If SUBTASK**:
-         1. Call `search_tasks` (with project_id if known, or scope it) to find the Parent Task.
-         2. Check if this subtask text appears in the parent task's children/subtasks (if visible) or generic search.
+         1. Find Parent Task.
+         2. Check if this subtask exists.
          3. **Logic**:
-            - **Found Match?** -> Plan to **UPDATE** (using `update_task`).
-            - **No Match?** -> Plan to **CREATE** (using `add_task_to_database` linked to parent).
+            - **Found Match?** -> Plan to **UPDATE**.
+            - **No Match?** -> Plan to **CREATE**.
 
     3. **CONSULT**:
        - Present the **Complete Proposal** to the user.
-       - *Example (Update)*: "I found an existing task 'Buy Milk'. Do you want me to update its status or due date?"
-       - *Example (Create)*: "I suggest creating a new Task 'Buy Milk' under Project 'Life'. I've also drafted subtasks..."
        - Get confirmation.
 
     4. **EXECUTE**:
-       - Once confirmed, call the specific tool decided in Step 2 (Add or Update).
+       - Once confirmed, execute the changes.
 
     CRITICAL:
-    - **Scoped Search**: NEVER search for tasks without a Project ID context if possible.
+    - **Scoped Search**: Always use filters when querying.
     - **Upsert Logic**: Always prefer updating an existing item over creating a duplicate.
     - **Value the Hierarchy**: Ensure every Task has a Project, and every Subtask has a Task.
     - **Wait for Confirmation**: Do not write/update DB until confirmed.
     """
+    
 
 root_agent = LlmAgent(
     name="TaskDecompositionAgent",
     model=MODEL,
     description="Agent for breaking down high-level tasks into actionable subtasks.",
     instruction=orchestrator_instruction,
-    before_agent_callback=load_project_context,
+    before_agent_callback=[],
     tools=[
-        search_projects,
-        search_tasks,
-        add_project_to_database,
-        update_project,
-        add_task_to_database,
-        update_task
+        get_notion_mcp_tool()
     ]
 )
 
