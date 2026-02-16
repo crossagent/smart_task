@@ -31,7 +31,7 @@ def orchestrator_instruction(context: ReadonlyContext = None) -> str:
     Dynamic instruction that includes Project Context from state.
     """
     return f"""
-    You are the 'Add Task' Orchestrator.
+    You are the 'Task Decomposition' Agent.
     Your job is to manage the flow of creating new items in the system, ensuring they are placed at the correct level of granularity.
 
     CURRENT PROJECTS (Outline):
@@ -109,9 +109,9 @@ def orchestrator_instruction(context: ReadonlyContext = None) -> str:
     """
 
 root_agent = LlmAgent(
-    name="AddTaskOrchestrator",
+    name="TaskDecompositionAgent",
     model=MODEL,
-    description="Orchestrator for adding new Projects or Tasks.",
+    description="Agent for breaking down high-level tasks into actionable subtasks.",
     instruction=orchestrator_instruction,
     before_agent_callback=load_project_context,
     tools=[

@@ -13,13 +13,13 @@ async def smart_task_client():
 async def test_smart_task_dispatch(smart_task_client):
     """
     Test Case: SmartTaskAgent - Dispatch to sub-agent
-    Verifies routing to DailyTodoAgent via transfer_to_agent.
+    Verifies routing to ProgressAggregationAgent via transfer_to_agent.
     """
     MockLlm.set_behaviors({
-        # Root agent receives "今天有什么工作" -> transfers to DailyTodoAgent
+        # Root agent receives "今天有什么工作" -> transfers to ProgressAggregationAgent
         "今天有什么工作": {
             "tool": "transfer_to_agent",
-            "args": {"agent_name": "DailyTodoAgent"}
+            "args": {"agent_name": "ProgressAggregationAgent"}
         }
     })
     

@@ -58,7 +58,7 @@ def configure_agents_mock_model():
     Force all agents to use the mock model for testing.
     This overrides any hardcoded 'gemini-2.5-flash' in the agent definitions.
     """
-    from smart_task_app.remote_a2a.new_task.agent import root_agent as new_task_agent
+    from smart_task_app.remote_a2a.task_decomposition.agent import root_agent as new_task_agent
     
     agents = [
         new_task_agent,
@@ -111,7 +111,8 @@ def start_a2a_server():
     
     # Wait for server to be ready
     # Check DailyTodo agent card as health check
-    server_url = "http://localhost:28001/a2a/daily_todo/.well-known/agent-card.json"
+    # Check ProgressAggregation agent card as health check
+    server_url = "http://localhost:28001/a2a/progress_aggregation/.well-known/agent-card.json"
     timeout = 30 # seconds
     start_time = time.time()
     

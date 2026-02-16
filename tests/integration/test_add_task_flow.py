@@ -3,11 +3,11 @@ import pytest
 from tests.test_core.test_client import AgentTestClient
 from tests.test_core.mock_llm import MockLlm
 # Import the NEW orchestrator agent
-from smart_task_app.remote_a2a.new_task.agent import root_agent as new_task_agent
+from smart_task_app.remote_a2a.task_decomposition.agent import root_agent as new_task_agent
 
 @pytest.fixture
 async def task_agent_client():
-    """Client for AddTaskOrchestrator."""
+    """Client for TaskDecompositionAgent."""
     return AgentTestClient(agent=new_task_agent, app_name="smart_task")
 
 @pytest.fixture
@@ -69,7 +69,7 @@ def mock_context_tools():
 @pytest.mark.anyio
 async def test_add_task_upsert_flow(task_agent_client, mock_context_tools):
     """
-    Test Case: AddTaskOrchestrator - Upsert Flow
+    Test Case: TaskDecompositionAgent - Upsert Flow
     Verifies: "Add task X" -> Search -> Find "X" -> Update "X" instead of create.
     """
     MockLlm.set_behaviors({

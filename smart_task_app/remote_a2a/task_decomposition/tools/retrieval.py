@@ -4,7 +4,7 @@ Merged from project_context/tools/retrieval.py and task_context/tools/retrieval.
 """
 import json
 from typing import Optional
-from smart_task_app.remote_a2a.new_task.tools.notion import query_database
+from smart_task_app.remote_a2a.task_decomposition.tools.notion import query_database
 
 
 # --- Project Tools ---
