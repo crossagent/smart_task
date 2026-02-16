@@ -3,6 +3,8 @@ import sys
 from google.adk.agents import LlmAgent
 from google.adk.agents.remote_a2a_agent import RemoteA2aAgent, AGENT_CARD_WELL_KNOWN_PATH
 from google.adk.apps import App
+from google.adk.sessions import VertexAiSessionService
+from google.adk.memory import VertexAiMemoryBankService
 from .shared_libraries.constants import MODEL
 
 # Import local implementations of sub-agents
@@ -15,6 +17,22 @@ from .remote_a2a.experience_agent.agent import root_agent as LocalExperienceAgen
 IS_REMOTE_MODE = os.environ.get("REMOTE_AGENTS", "false").lower() == "true"
 
 print(f"[SmartTaskApp] Loading in {'REMOTE' if IS_REMOTE_MODE else 'LOCAL'} mode.")
+
+# Configure Session and Memory services for Vertex AI Express Mode
+AGENT_ENGINE_ID = os.environ.get("AGENT_ENGINE_ID")
+USE_VERTEX_AI = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").upper() == "TRUE"
+
+if USE_VERTEX_AI and AGENT_ENGINE_ID:
+  print(f"[SmartTaskApp] Using Vertex AI Session and Memory (Agent Engine: {AGENT_ENGINE_ID})")
+  session_service = VertexAiSessionService(agent_engine_id=AGENT_ENGINE_ID)
+  memory_service = VertexAiMemoryBankService(agent_engine_id=AGENT_ENGINE_ID)
+else:
+  if USE_VERTEX_AI and not AGENT_ENGINE_ID:
+    print("[SmartTaskApp] Warning: GOOGLE_GENAI_USE_VERTEXAI=TRUE but AGENT_ENGINE_ID not set")
+    print("[SmartTaskApp] Please run: python scripts/setup_agent_engine.py")
+  print("[SmartTaskApp] Using default local session/memory services")
+  session_service = None
+  memory_service = None
 
 if IS_REMOTE_MODE:
     # Remote Mode: Use RemoteA2aAgent to connect to separate processes
@@ -68,5 +86,7 @@ _root_agent = LlmAgent(
 # Use App pattern to explicitly set the app name and avoid warnings
 app = App(
     name="smart_task_app",
-    root_agent=_root_agent
+    root_agent=_root_agent,
+    session_service=session_service,
+    memory_service=memory_service
 )
