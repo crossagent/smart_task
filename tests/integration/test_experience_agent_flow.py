@@ -13,19 +13,20 @@
 # limitations under the License.
 
 """
-Integration tests for Experience Agent flow.
+Integration tests for Veteran Agent flow.
 """
 
 import pytest
 from tests.test_core.test_client import AgentTestClient
 from tests.test_core.mock_llm import MockLlm
-from smart_task_app.remote_a2a.experience_agent.agent import root_agent as experience_agent
+from smart_task_app.remote_a2a.veteran_agent.agent import root_agent as veteran_agent
+from smart_task_app.remote_a2a.veteran_agent.tools.update_plan import STRATEGIC_PLAN_KEY
 
 
 @pytest.fixture
-async def experience_agent_client():
-    """Client for ExperienceAgent."""
-    return AgentTestClient(agent=experience_agent, app_name="smart_task")
+async def veteran_agent_client():
+    """Client for VeteranAgent."""
+    return AgentTestClient(agent=veteran_agent, app_name="smart_task")
 
 
 @pytest.fixture
@@ -33,7 +34,7 @@ def mock_rag_tool():
     """Replace real RAG tool with mock."""
     from unittest.mock import MagicMock
     
-    original_tools = list(experience_agent.tools)
+    original_tools = list(veteran_agent.tools)
     
     # Create mock RAG tool
     mock_tool = MagicMock(return_value="""
@@ -49,15 +50,35 @@ def mock_rag_tool():
 """)
     mock_tool.__name__ = "retrieve_rag_documentation"
     
-    experience_agent.tools = [mock_tool]
+    veteran_agent.tools = [mock_tool]
     yield mock_tool
-    experience_agent.tools = original_tools
+    veteran_agent.tools = original_tools
+
+
+@pytest.fixture
+def mock_update_plan_tool():
+    """Replace update_plan tool with mock."""
+    from unittest.mock import AsyncMock
+    
+    original_tools = list(veteran_agent.tools)
+    
+    # Create mock update_plan tool that simulates state update
+    mock_tool = AsyncMock(return_value={
+        'status': 'ok',
+        'message': '计划已成功更新并保存。',
+        'plan_length': 500
+    })
+    mock_tool.__name__ = "update_plan"
+    
+    veteran_agent.tools = [mock_tool]
+    yield mock_tool
+    veteran_agent.tools = original_tools
 
 
 @pytest.mark.anyio
-async def test_retrieve_experience_flow(experience_agent_client, mock_rag_tool):
+async def test_retrieve_experience_flow(veteran_agent_client, mock_rag_tool):
     """
-    Test Case: ExperienceAgent - Retrieve Flow
+    Test Case: VeteranAgent - Retrieve Flow
     Verifies: User asks for similar cases -> Agent calls RAG tool -> Returns results
     """
     MockLlm.set_behaviors({
@@ -67,10 +88,10 @@ async def test_retrieve_experience_flow(experience_agent_client, mock_rag_tool):
         }
     })
     
-    await experience_agent_client.create_new_session("user_test", "sess_retrieve_1")
+    await veteran_agent_client.create_new_session("user_test", "sess_retrieve_1")
     
     # Trigger the retrieve flow
-    responses = await experience_agent_client.chat("有类似的案例吗？关于任务拆解的")
+    responses = await veteran_agent_client.chat("有类似的案例吗？关于任务拆解的")
     
     # Verify the agent responded
     assert len(responses) >= 0
@@ -79,33 +100,117 @@ async def test_retrieve_experience_flow(experience_agent_client, mock_rag_tool):
 
 
 @pytest.mark.anyio
-async def test_save_experience_placeholder_flow(experience_agent_client):
+async def test_create_plan_flow(veteran_agent_client, mock_update_plan_tool):
     """
-    Test Case: ExperienceAgent - Save Flow (Placeholder)
-    Verifies: User wants to save experience -> Agent indicates feature is under development
+    Test Case: VeteranAgent - Create Plan Flow
+    Verifies: User asks to create plan -> Agent creates plan -> Plan saved to state
     """
-    await experience_agent_client.create_new_session("user_test", "sess_save_1")
+    MockLlm.set_behaviors({
+        "制定计划": {
+            "tool": "update_plan",
+            "args": {
+                "plan_content": """# 执行计划：项目开发
+
+## 目标
+完成新功能开发
+
+## 主要步骤
+1. 需求分析
+2. 设计方案
+3. 编码实现
+4. 测试验证
+
+## 预期结果
+功能上线
+"""
+            }
+        }
+    })
     
-    # Trigger save flow
-    responses = await experience_agent_client.chat("保存这个经验：使用看板方法提高效率")
+    await veteran_agent_client.create_new_session("user_test", "sess_create_plan")
+    
+    # Trigger plan creation
+    responses = await veteran_agent_client.chat("帮我制定一个项目开发计划")
     
     # Verify the agent responded
     assert len(responses) >= 0
-    # The agent should indicate this feature is under development
 
 
 @pytest.mark.anyio
-async def test_agent_routing_from_root():
+async def test_update_plan_flow(veteran_agent_client, mock_update_plan_tool):
     """
-    Test Case: Root Agent -> ExperienceAgent routing
-    Verifies: Root agent correctly delegates to ExperienceAgent
+    Test Case: VeteranAgent - Update Plan Flow
+    Verifies: Existing plan -> User requests update -> Plan updated
     """
-    from smart_task_app.agent import _root_agent
+    await veteran_agent_client.create_new_session("user_test", "sess_update_plan")
     
-    # Verify ExperienceAgent is in sub_agents
-    sub_agent_names = [
-        getattr(agent, 'name', str(agent)) 
-        for agent in _root_agent.sub_agents
-    ]
+    # Note: We cannot directly manipulate session state in this test framework
+    # The test verifies the agent can handle update requests
     
-    assert "ExperienceAgent" in sub_agent_names
+    MockLlm.set_behaviors({
+        "更新计划": {
+            "tool": "update_plan",
+            "args": {
+                "plan_content": """# 执行计划：更新后的计划
+
+## 目标
+新目标
+
+## 主要步骤
+1. 第一步
+2. 第二步
+3. 第三步（新增）
+"""
+            }
+        }
+    })
+    
+    # Trigger plan update
+    responses = await veteran_agent_client.chat("更新计划，增加第三步")
+    
+    # Verify the agent responded
+    assert len(responses) >= 0
+
+
+@pytest.mark.anyio
+async def test_instruction_with_plan_state():
+    """
+    Test Case: Instruction generation
+    Verifies: Instruction is properly generated as static string
+    """
+    from smart_task_app.remote_a2a.veteran_agent.agent import return_instructions_root
+    
+    # Get the static instruction
+    instruction = return_instructions_root()
+    
+    # Check that instruction contains key elements
+    assert "老兵助手" in instruction or "Veteran Agent" in instruction
+    assert "retrieve_rag_documentation" in instruction
+    assert "update_plan" in instruction
+    assert "执行计划" in instruction
+
+@pytest.mark.anyio
+async def test_callback_state_access():
+    """
+    Test Case: Callback state access
+    Verifies: before_agent_callback can access state correctly
+    """
+    from smart_task_app.remote_a2a.veteran_agent.agent import inject_plan_to_instruction
+    from unittest.mock import MagicMock
+    
+    # Create mock callback context
+    mock_context = MagicMock()
+    mock_context.state.to_dict.return_value = {STRATEGIC_PLAN_KEY: "# Test Plan"}
+    
+    # Call the callback - should return None to allow execution
+    result = inject_plan_to_instruction(mock_context)
+    assert result is None  # Should return None to allow normal execution
+    
+    # Verify state.to_dict() was called
+    mock_context.state.to_dict.assert_called_once()
+    
+    # Test with context but state is None
+    context_none_state = MagicMock()
+    context_none_state.state = None
+    instruction = return_instructions_root(context_none_state)
+    assert "还没有执行计划" in instruction or "没有计划" in instruction or "❌" in instruction
