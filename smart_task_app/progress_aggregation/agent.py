@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 from smart_task_app.shared_libraries.notion_util import get_notion_mcp_tool
-from smart_task_app.remote_a2a.progress_aggregation.callbacks import inject_current_time
+from smart_task_app.progress_aggregation.callbacks import inject_current_time
 from smart_task_app.shared_libraries.constants import MODEL
 
 root_agent = LlmAgent(
