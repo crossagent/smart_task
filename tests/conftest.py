@@ -35,26 +35,6 @@ def reset_mock_behaviors():
     """
     MockLlm.clear_behaviors()
 
-from unittest.mock import MagicMock
-import notion_client
-
-@pytest.fixture(autouse=True)
-def mock_notion_writes(monkeypatch):
-    """
-    Safety fixture: Automatically mock Notion write operations (pages.create) 
-    to prevent accidental writes to the production database during tests.
-    """
-    # We patch the Client class in notion_client module so it affects all imports
-    original_init = notion_client.Client.__init__
-
-    def safe_init(self, *args, **kwargs):
-        original_init(self, *args, **kwargs)
-        # Mock the pages.create method which is used for writing tasks
-        self.pages = MagicMock()
-        self.pages.create.return_value = {"id": "mock_safe_test_id"}
-        
-    monkeypatch.setattr(notion_client.Client, "__init__", safe_init)
-
 
 @pytest.fixture(autouse=True)
 def configure_agents_mock_model():
@@ -62,16 +42,16 @@ def configure_agents_mock_model():
     Force all agents to use the mock model for testing.
     This overrides any hardcoded 'gemini-2.5-flash' in the agent definitions.
     """
-    from smart_task_app.task_decomposition.agent import root_agent as new_task_agent
+    from smart_task_app.task_decomposition.agent import root_agent as task_decomposition_agent
+    from smart_task_app.progress_aggregation.agent import root_agent as progress_aggregation_agent
     
     agents = [
-        new_task_agent,
+        task_decomposition_agent,
+        progress_aggregation_agent,
     ]
     
     for agent in agents:
         agent.model = "mock/pytest"
-
-
 
 @pytest.fixture
 def anyio_backend():
