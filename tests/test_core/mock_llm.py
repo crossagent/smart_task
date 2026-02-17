@@ -68,8 +68,8 @@ class MockLlm(BaseLlm):
         
         # Extract the last user message
         if not llm_request.contents:
-             yield self._generate_response("EMPTY_REQUEST")
-             return
+            yield self._generate_response("EMPTY_REQUEST")
+            return
 
         last_content = llm_request.contents[-1]
         text_input = ""

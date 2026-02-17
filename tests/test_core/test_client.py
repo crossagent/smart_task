@@ -16,7 +16,7 @@ class AgentTestClient:
 
     def __init__(self, agent: LlmAgent, app_name: str = "test_app"):
         if not agent:
-             raise ValueError("Agent must be provided")
+            raise ValueError("Agent must be provided")
         
         self.app_name = app_name
         self.agent = agent

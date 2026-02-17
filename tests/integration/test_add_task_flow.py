@@ -3,7 +3,7 @@ import pytest
 from tests.test_core.test_client import AgentTestClient
 from tests.test_core.mock_llm import MockLlm
 # Import the NEW orchestrator agent
-from smart_task_app.remote_a2a.task_decomposition.agent import root_agent as new_task_agent
+from smart_task_app.task_decomposition.agent import root_agent as new_task_agent
 
 @pytest.fixture
 async def task_agent_client():
@@ -15,56 +15,37 @@ def mock_context_tools():
     from unittest.mock import MagicMock
     """
     Replace real tools with MagicMocks.
+    Since the agent uses McpToolset which loads tools dynamically/remotely,
+    we must REPLACE the toolset with explicit mock function-based tools 
+    that match the names expected by the agent's instructions.
     """
     original_tools = list(new_task_agent.tools)
-    new_tools = []
     
-    for tool in original_tools:
-        # LlmAgent tools are often callables (FunctionTool) or BaseTool instances.
-        tool_name = getattr(tool, "__name__", getattr(tool, "name", str(tool)))
-        
-        if tool_name == "search_projects":
-            # Mock Search Projects
-            m = MagicMock(return_value='{"projects": [{"id": "PROJ-123", "name": "Personal Life"}]}')
-            m.__name__ = "search_projects"
-            new_tools.append(m)
-            
-        elif tool_name == "search_tasks":
-            # Mock Search Tasks (simulate finding an existing task)
-            m = MagicMock(return_value='{"tasks": [{"id": "TASK-OLD", "title": "Buy Milk"}]}')
-            m.__name__ = "search_tasks"
-            new_tools.append(m)
-            
-        elif tool_name == "add_task_to_database":
-             # Mock Notion Add - Should NOT be called in this test scenario
-             m = MagicMock(return_value='{"status": "success", "id": "TASK-NEW"}')
-             m.__name__ = "add_task_to_database"
-             new_tools.append(m)
-        
-        elif tool_name == "update_task":
-             # Mock Notion Update - THIS should be called
-             m = MagicMock(return_value='{"status": "success", "id": "TASK-OLD"}')
-             m.__name__ = "update_task"
-             new_tools.append(m)
-             
-        elif tool_name == "add_project_to_database":
-             # Mock Notion Add Project
-             m = MagicMock(return_value='{"status": "success", "id": "PROJ-1"}')
-             m.__name__ = "add_project_to_database"
-             new_tools.append(m)
-             
-        elif tool_name == "update_project":
-             m = MagicMock(return_value='{"status": "success", "id": "PROJ-1"}')
-             m.__name__ = "update_project"
-             new_tools.append(m)
-        else:
-             new_tools.append(tool)
-            
-    new_task_agent.tools = new_tools
+    # Define mocks for the tools referenced in the system instruction
+    mock_query = MagicMock(return_value='{"results": [{"id": "PROJ-123", "properties": {"Name": {"title": [{"text": {"content": "Personal Life"}}]}}}]}')
+    mock_query.__name__ = "API-query-data-source"
+    # We need to set the name attribute for the Runner to identify it
+    mock_query.name = "API-query-data-source"
+    
+    mock_post_page = MagicMock(return_value='{"id": "TASK-NEW"}')
+    mock_post_page.__name__ = "API-post-page"
+    mock_post_page.name = "API-post-page"
+    
+    mock_patch_page = MagicMock(return_value='{"id": "TASK-OLD"}')
+    mock_patch_page.__name__ = "API-patch-page"
+    mock_patch_page.name = "API-patch-page"
+    
+    mock_post_search = MagicMock(return_value='{"results": []}')
+    mock_post_search.__name__ = "API-post-search"
+    mock_post_search.name = "API-post-search"
+
+    # Replace agent tools with our mocks
+    new_task_agent.tools = [mock_query, mock_post_page, mock_patch_page, mock_post_search]
+    
     yield
+    
+    # Restore original tools
     new_task_agent.tools = original_tools
-
-
 
 @pytest.mark.anyio
 async def test_add_task_upsert_flow(task_agent_client, mock_context_tools):
@@ -75,27 +56,26 @@ async def test_add_task_upsert_flow(task_agent_client, mock_context_tools):
     MockLlm.set_behaviors({
         # 1. Orchestrator receives "Add a task..." -> Calls search projects
         "add a task": {
-             "tool": "search_projects", 
-             "args": {"query": "Buy Milk"} 
+             "tool": "API-query-data-source", 
+             "args": {"data_source_id": "1990d59debb781c58d78c302dffea2b5"} # Project DB ID
         },
         
-        # 2. After search_projects finds "Personal Life" (ID: PROJ-123), 
-        # it calls search_tasks WITH project_id
+        # 2. After search finds "Personal Life", it calls search tasks
         "personal life": { 
-             "tool": "search_tasks",
+             "tool": "API-query-data-source",
              "args": {
-                 "query": "Buy Milk",
-                 "project_id": "PROJ-123" # Verified requirement
+                 "data_source_id": "1990d59debb7816dab7bf83e93458d30", # Task DB ID
+                 # Filter logic is complex, just checking the tool call here
              }
         },
         
-        # 3. serach_tasks returns matches (simulated in fixture). 
+        # 3. search_tasks returns matches (simulated in fixture). 
         # Orchestrator should decide to UPDATE.
         "buy milk": { 
-             "tool": "update_task",
+             "tool": "API-patch-page",
              "args": {
                  "page_id": "TASK-OLD",
-                 "title": "Buy Milk"
+                 "properties": {"Status": "To Do"}
              }
         }
     })

@@ -1,7 +1,11 @@
 import os
 import pytest
+from dotenv import load_dotenv
 from google.adk.models import LLMRegistry
 from tests.test_core.mock_llm import MockLlm
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 def pytest_configure(config):
@@ -58,7 +62,7 @@ def configure_agents_mock_model():
     Force all agents to use the mock model for testing.
     This overrides any hardcoded 'gemini-2.5-flash' in the agent definitions.
     """
-    from smart_task_app.remote_a2a.task_decomposition.agent import root_agent as new_task_agent
+    from smart_task_app.task_decomposition.agent import root_agent as new_task_agent
     
     agents = [
         new_task_agent,
@@ -67,91 +71,7 @@ def configure_agents_mock_model():
     for agent in agents:
         agent.model = "mock/pytest"
 
-import subprocess
-import time
-import urllib.request
-import sys
 
-@pytest.fixture(scope="session", autouse=True)
-def start_a2a_server():
-    """
-    Automatically start the A2A remote server for the duration of the test session.
-    This removes the need to manually run start_root_agent.ps1.
-    """
-    print(f">>> [conftest] Starting A2A Server on port 28001...")
-    
-    # Command to start the server: python -m google.adk.cli api_server ...
-    cmd = [
-        sys.executable, "-m", "google.adk.cli", 
-        "api_server", "smart_task_app/remote_a2a", 
-        "--a2a", "--port", "28001"
-    ]
-    
-    # We need to set PYTHONPATH so it can find smart_task_app modules
-    env = os.environ.copy()
-    if "PYTHONPATH" not in env:
-        env["PYTHONPATH"] = os.getcwd()
-    else:
-        env["PYTHONPATH"] = os.getcwd() + os.pathsep + env["PYTHONPATH"]
-
-    # Start process
-    try:
-        # Redirect stdout/stderr to a file to prevent pipe buffer deadlock
-        log_file = open("server_startup.log", "w")
-        proc = subprocess.Popen(
-            cmd,
-            stdout=log_file,
-            stderr=log_file,
-            cwd=os.getcwd(), 
-            env=env
-        )
-    except Exception as e:
-        print(f">>> [conftest] FAILED TO START SERVER: {e}")
-        raise e
-    
-    # Wait for server to be ready
-    # Check DailyTodo agent card as health check
-    # Check ProgressAggregation agent card as health check
-    server_url = "http://localhost:28001/a2a/progress_aggregation/.well-known/agent-card.json"
-    timeout = 30 # seconds
-    start_time = time.time()
-    
-    server_ready = False
-    print(f">>> [conftest] Waiting for server at {server_url}...")
-    
-    while time.time() - start_time < timeout:
-        try:
-            with urllib.request.urlopen(server_url) as response:
-                if response.status == 200:
-                    print(">>> [conftest] A2A Server is ready!")
-                    server_ready = True
-                    break
-        except Exception:
-            time.sleep(1)
-            
-    if not server_ready:
-        print(">>> [conftest] Server timed out. Checking output...")
-        proc.terminate()
-        try:
-            # Output is in log file, print last lines
-            log_file.close() # Flush and close for reading
-            with open("server_startup.log", "r") as f:
-                content = f.read()
-                print(f"Server Log:\n{content[-1000:]}")
-        except Exception:
-            pass
-            
-        raise RuntimeError(f"A2A Server failed to start within {timeout} seconds")
-
-    yield
-
-    print(">>> [conftest] Stopping A2A Server...")
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-    log_file.close()
 
 @pytest.fixture
 def anyio_backend():
