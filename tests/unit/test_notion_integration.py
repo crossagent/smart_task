@@ -75,7 +75,7 @@ def test_fetch_task_database():
         toolset = get_notion_mcp_tool()
         params = toolset._connection_params
         server_params = params.server_params
-        task_db_id = os.environ.get("NOTION_TASK_DATABASE_ID")
+        task_db_id = os.environ.get("NOTION_TASK_DATABASE_ID", "1990d59d-ebb7-815d-92a9-000be178f9ac")
         
         if not task_db_id:
             pytest.skip("NOTION_TASK_DATABASE_ID not set")
@@ -130,7 +130,7 @@ def test_fetch_project_database():
         toolset = get_notion_mcp_tool()
         params = toolset._connection_params
         server_params = params.server_params
-        project_db_id = os.environ.get("NOTION_PROJECT_DATABASE_ID")
+        project_db_id = os.environ.get("NOTION_PROJECT_DATABASE_ID", "1990d59d-ebb7-812d-83c2-000bdfa9dc64")
         
         if not project_db_id:
             pytest.skip("NOTION_PROJECT_DATABASE_ID not set")
@@ -241,6 +241,56 @@ def test_list_accessible_databases():
 
         except Exception as e:
             pytest.fail(f"Failed to search databases: {e}")
+
+    asyncio.run(_test_logic())
+
+def test_fetch_memo_database():
+    """
+    Integration test to verify we can query the Memo (备忘录) Database.
+    """
+    async def _test_logic():
+        toolset = get_notion_mcp_tool()
+        params = toolset._connection_params
+        server_params = params.server_params
+        target_db_id = "3120d59d-ebb7-81d4-9593-000b5ab3a76c"
+        
+        try:
+            from mcp import stdio_client, ClientSession
+        except ImportError:
+            pytest.skip("mcp module not installed")
+
+        print(f"\n[Test] Querying Memo DB: {target_db_id}")
+        try:
+            async with stdio_client(server_params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    
+                    result = await session.call_tool(
+                        name="API-query-data-source",
+                        arguments={
+                            "data_source_id": target_db_id,
+                            "page_size": 1
+                        }
+                    )
+                    
+                    if hasattr(result, 'content') and result.content:
+                         text_content = result.content[0].text
+                         import json
+                         data = json.loads(text_content)
+                         
+                         if "object" in data and data["object"] == "error":
+                             print(f"[Test] Error querying Memo DB: {data.get('message')}")
+                             pytest.fail(f"Memo DB Query Error: {data.get('message')}")
+                         
+                         results = data.get("results", [])
+                         print(f"[Test] Successfully fetched {len(results)} items from Memo db.")
+                         if len(results) > 0:
+                             print(f"[Test] Sample Memo url: {results[0].get('url')}")
+                    else:
+                        pytest.fail(f"Empty response from Memo DB query: {result}")
+
+        except Exception as e:
+            pytest.fail(f"Exception querying Memo DB: {e}")
 
     asyncio.run(_test_logic())
 
