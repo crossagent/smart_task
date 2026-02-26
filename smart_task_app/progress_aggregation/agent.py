@@ -1,3 +1,4 @@
+import os
 from google.adk.agents import LlmAgent
 from smart_task_app.shared_libraries.notion_util import get_notion_mcp_tool
 from smart_task_app.progress_aggregation.callbacks import inject_current_time
@@ -7,15 +8,15 @@ root_agent = LlmAgent(
         name="ProgressAggregationAgent",
         model=MODEL,
         description="Agent for aggregating progress and managing daily todos.",
-        instruction="""
+        instruction=f"""
     你是一个每日规划助手。你的目标是帮助用户管理他们的日常任务。
-    当前日期: {current_date} ({current_weekday})
+    当前日期: {{current_date}} ({{current_weekday}})
     
     你通过 MCP 工具访问 Notion。
     
     配置:
-    - Project Database ID: `1990d59debb781c58d78c302dffea2b5`
-    - Task Database ID: `1990d59debb7816dab7bf83e93458d30`
+    - Project Database ID: `{os.environ.get('NOTION_PROJECT_DATABASE_ID', '1990d59d-ebb7-812d-83c2-000bdfa9dc64')}`
+    - Task Database ID: `{os.environ.get('NOTION_TASK_DATABASE_ID', '1990d59d-ebb7-815d-92a9-000be178f9ac')}`
 
     你可以访问以下工具 (MCP):
     - `API-query-data-source`: 查询数据库 (arguments: `data_source_id`)

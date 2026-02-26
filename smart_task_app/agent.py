@@ -11,6 +11,7 @@ from .shared_libraries.constants import MODEL
 # We use relative imports to avoid hardcoding the package name 'smart_task_app' to be robust
 from .task_decomposition.agent import root_agent as LocalTaskDecompositionAgent
 from .progress_aggregation.agent import root_agent as LocalProgressAggregationAgent
+from .memo_recording.agent import root_agent as LocalMemoRecordingAgent
 
 # Configure Session and Memory services for Vertex AI Express Mode
 AGENT_ENGINE_ID = os.environ.get("AGENT_ENGINE_ID")
@@ -33,6 +34,7 @@ else:
 sub_agents_config = [
     LocalTaskDecompositionAgent,
     LocalProgressAggregationAgent,
+    LocalMemoRecordingAgent,
 ]
 
 # Define the root agent
@@ -43,13 +45,15 @@ _root_agent = LlmAgent(
     instruction="""
 你是一个智能任务管理助手。你的主要职责是根据用户的请求，将任务分发给最合适的子助手。
 
-你有以下两个子助手：
+你有以下子助手：
 1. **ProgressAggregationAgent**: 负责处理与"每日待办事项"、"日程查询"、"今天/明天有什么工作"相关的请求。
-2. **TaskDecompositionAgent**: 负责处理"添加新任务"、"任务拆解"、"创建待办"等任务创建相关的请求。
+2. **MemoRecordingAgent**: 负责处理"记录一个想法"、"老板说要..."、"添加一个备忘录"、"记一个新需求"等模糊或初期的任务录入请求。
+3. **TaskDecompositionAgent**: 负责处理"拆解备忘录"、"细化需求"、"创建待办"等具体的任务规划和层级拆分请求。
 
 **分发规则**:
 - 如果用户问 "今天有什么工作"、"查看明天的任务"、"列出我的todo"，请调用 **ProgressAggregationAgent**。
-- 如果用户说 "添加一个任务"、"安排明天开会"、"创建一个提醒"，请调用 **TaskDecompositionAgent**。
+- 如果用户说 "记录一下"、"把这个想法记下来"、"老板安排了..."，请调用 **MemoRecordingAgent**。
+- 如果用户说 "分解任务"、"将备忘录拆分为项目和任务"，请调用 **TaskDecompositionAgent**。
 - 如果无法确定，请优先尝试理解用户的意图并选择最相关的助手。
 
 请直接调用相应的助手来处理请求。

@@ -5,14 +5,14 @@ from google.adk.agents.callback_context import CallbackContext
 from google.adk.tools import AgentTool
 from google.genai import types
 from google.adk.agents.readonly_context import ReadonlyContext
-#from smart_task_app.shared_libraries.constants import MODEL
+from smart_task_app.shared_libraries.constants import MODEL
 
 # Import retrieval tools (consolidated into tools/retrieval.py)
 # Retrieval tools removed
 
 
 # Import Notion MCP Tool
-#from smart_task_app.shared_libraries.notion_util import get_notion_mcp_tool
+from smart_task_app.shared_libraries.notion_util import get_notion_mcp_tool
 
 # Imports removed
 
@@ -58,45 +58,51 @@ def orchestrator_instruction(context: ReadonlyContext = None) -> str:
     - Use `API-post-page` to create new items.
     - Use `API-patch-page` to update item properties.
 
-    WORKFLOW - CONTEXT ASSEMBLY:
+    1. **DISCOVER**:
+       - Query the Memo database using `API-query-data-source` (arg: `data_source_id: {os.environ.get('NOTION_MEMO_DATABASE_ID')}`).
+       - **CRITICAL**: You MUST apply a `filter` argument in the EXACT format required by the Notion API to only fetch records where the `State` property equals `未处理`.
+         Example Filter JSON:
+         {{
+           "property": "State",
+           "status": {{
+             "equals": "未处理"
+           }}
+         }}
+       - Present the pending Memos to the user and ask which one they want to process.
 
-    1. **ANALYZE**: Determine if the user input is a **PROJECT**, **TASK**, or **SUBTASK**.
+    2. **ANALYZE**: 
+       - Read the selected Memo's background, task content, and related info.
+       - Determine if the requirement needs a new **PROJECT**, **TASK**(s), or **SUBTASK**(s).
 
-    2. **ASSEMBLE & CHECK**:
+    3. **ASSEMBLE & CHECK**:
        
        - **If PROJECT**:
-         1. Search Project DB using `API-query-data-source` (arg: `data_source_id`).
-         2. **Logic**:
-            - **Found Match?** -> Plan to **UPDATE** (`API-patch-page`).
-            - **No Match?** -> Plan to **CREATE** (`API-post-page`).
+         1. Search Project DB using `API-query-data-source`.
+         2. **Logic**: Found Match? -> Plan **UPDATE** | No Match? -> Plan **CREATE**.
        
        - **If TASK**:
-         1. Ensure you have a Project ID. If not, search Project DB.
-         2. Search Task DB using `API-query-data-source` (arg: `data_source_id`).
-         3. **Logic**:
-            - **Found Match?** -> Plan to **UPDATE** (`API-patch-page`).
-            - **No Match?** -> Plan to **CREATE** (`API-post-page`).
-            - *Internal Step*: Generate 3-5 subtasks to help the user.
+         1. Ensure you have a Project ID (Search Project DB if needed).
+         2. Search Task DB using `API-query-data-source`.
+         3. **Logic**: Found Match? -> Plan **UPDATE** | No Match? -> Plan **CREATE**.
             
        - **If SUBTASK**:
-         1. Find Parent Task.
-         2. Check if this subtask exists.
-         3. **Logic**:
-            - **Found Match?** -> Plan to **UPDATE** (`API-patch-page`).
-            - **No Match?** -> Plan to **CREATE** (`API-post-page`).
+         1. Find Parent Task. Check if subtask exists.
+         2. **Logic**: Found Match? -> Plan **UPDATE** | No Match? -> Plan **CREATE**.
 
-    3. **CONSULT**:
-       - Present the **Complete Proposal** to the user.
+    4. **CONSULT**:
+       - Present the **Complete Breakdown Proposal** to the user.
        - Get confirmation.
 
-    4. **EXECUTE**:
-       - Once confirmed, execute the changes.
+    5. **EXECUTE**:
+       - Once confirmed, use `API-post-page` or `API-patch-page` to create/update the items.
+       - **RELATION LINKING**: When creating new Tasks, if the Notion database supports it, populate a relation property to link back to the source Memo's ID.
+       - **STATE UPDATE (CRITICAL)**: After the tasks/projects are successfully created, you MUST use `API-patch-page` on the ORIGINAL MEMO PAGE to change its `State` property from `未处理` to `已分配任务`.
 
-    CRITICAL:
+    CRITICAL RULES:
     - **Scoped Search**: Always use filters when querying.
-    - **Upsert Logic**: Always prefer updating an existing item over creating a duplicate.
-    - **Value the Hierarchy**: Ensure every Task has a Project, and every Subtask has a Task.
-    - **Wait for Confirmation**: Do not write/update DB until confirmed.
+    - **Upsert Logic**: Prefer updating an existing item over creating a duplicate.
+    - **Value the Hierarchy**: Every Task has a Project, every Subtask has a Task.
+    - **Close the Loop**: Never forget to update the Memo State after processing!
     """
     
 
