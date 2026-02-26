@@ -1,17 +1,18 @@
+import os
 from typing import Optional
 from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.tools import AgentTool
 from google.genai import types
 from google.adk.agents.readonly_context import ReadonlyContext
-from smart_task_app.shared_libraries.constants import MODEL
+#from smart_task_app.shared_libraries.constants import MODEL
 
 # Import retrieval tools (consolidated into tools/retrieval.py)
 # Retrieval tools removed
 
 
 # Import Notion MCP Tool
-from smart_task_app.shared_libraries.notion_util import get_notion_mcp_tool
+#from smart_task_app.shared_libraries.notion_util import get_notion_mcp_tool
 
 # Imports removed
 
@@ -27,8 +28,9 @@ def orchestrator_instruction(context: ReadonlyContext = None) -> str:
     You have access to Notion via MCP tools.
     
     CONFIGURATION:
-    - Project Database ID: `1990d59debb781c58d78c302dffea2b5`
-    - Task Database ID: `1990d59debb7816dab7bf83e93458d30`
+    - Project Database ID: `{os.environ.get('NOTION_PROJECT_DATABASE_ID', '1990d59d-ebb7-812d-83c2-000bdfa9dc64')}`
+    - Task Database ID: `{os.environ.get('NOTION_TASK_DATABASE_ID', '1990d59d-ebb7-815d-92a9-000be178f9ac')}`
+    - Memo Database ID: `{os.environ.get('NOTION_MEMO_DATABASE_ID', '3120d59d-ebb7-81d4-9593-000b5ab3a76c')}`
 
     HIERARCHY & GRANULARITY:
     
