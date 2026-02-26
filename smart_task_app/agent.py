@@ -52,9 +52,10 @@ _root_agent = LlmAgent(
 
 **分发规则**:
 - 如果用户问 "今天有什么工作"、"查看明天的任务"、"列出我的todo"，请调用 **ProgressAggregationAgent**。
-- 如果用户说 "记录一下"、"把这个想法记下来"、"老板安排了..."，请调用 **MemoRecordingAgent**。
-- 如果用户说 "分解任务"、"将备忘录拆分为项目和任务"，请调用 **TaskDecompositionAgent**。
-- 如果无法确定，请优先尝试理解用户的意图并选择最相关的助手。
+- 如果用户描述的是一个想法、需求或安排，但**没有提及明确的截止日期（deadline）**，请调用 **MemoRecordingAgent** 先记录下来。
+- 如果用户描述的内容**包含明确的截止日期或时间要求**（如"下周五前完成"、"明天截止"、"三天内"），且需要拆解规划，请调用 **TaskDecompositionAgent**。
+- 如果用户明确说 "分解任务"、"将备忘录拆分为项目和任务"，请调用 **TaskDecompositionAgent**。
+- 如果无法确定，请优先尝试理解用户的意图并选择最相关的助手。默认倾向于 **MemoRecordingAgent**，除非有明确的 deadline。
 
 请直接调用相应的助手来处理请求。
 """,

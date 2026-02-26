@@ -4,6 +4,22 @@ from google.adk.tools import FunctionTool, ToolContext
 
 from smart_task_app.shared_libraries.notion_util import get_notion_mcp_tool
 
+
+def _save_memo_to_state(
+    tool_context: ToolContext,
+    task_content: str,
+    background: str,
+    related_files: str,
+    requester: str,
+) -> None:
+    """Keep memo fields in ADK session state up to date."""
+    if tool_context is None:
+        return
+    tool_context.state["memo_task_content"] = task_content
+    tool_context.state["memo_background"] = background
+    tool_context.state["memo_related_files"] = related_files
+    tool_context.state["memo_requester"] = requester
+
 async def format_memo_template(
     task_content: str,
     background: str = "",
@@ -12,6 +28,10 @@ async def format_memo_template(
     tool_context: ToolContext = None
 ) -> str:
     """在将备忘录写入Notion之前，提供收集到的信息，生成一个标准的确认模板返回给大模型，大模型借此向用户确认。"""
+    # Persist the draft into session state so downstream tools/agents can read
+    # them without requiring the LLM to re-pass the arguments.
+    _save_memo_to_state(tool_context, task_content, background, related_files, requester)
+
     template = f"""
 请向用户展示以下备忘录草稿，并询问是否确认写入：
 
@@ -116,6 +136,10 @@ async def insert_memo_record(
     try:
         # 代理调用 Notion MCP 工具
         result = await api_post_page.run_async(args=notion_args, tool_context=tool_context)
+
+        # Update state with the actually-committed memo content.
+        _save_memo_to_state(tool_context, task_content, background, related_files, requester)
+
         return f"成功插入备忘录！Notion 返回结果：\n{result}"
     except Exception as e:
         return f"插入备忘录时发生异常：{str(e)}"
