@@ -1,0 +1,13 @@
+services:
+  socteamcopilot:
+    image: socteamcopilot
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - 45666:45666
+    container_name: socteamcopilot
+    volumes:
+      - ./data:/app/data  # 将本地data目录挂载到容器内的/app/data
+    environment:
+      - SESSION_DB_URL=sqlite:///./data/sessions.db  # 设置数据库路径到挂载目录
