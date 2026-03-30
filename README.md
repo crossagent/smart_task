@@ -1,93 +1,86 @@
-# Smart Task Agent (Major Refactor)
+# 🚀 Smart Task Agent (Logseq DB Version)
 
 > [!IMPORTANT]
-> **这是一次基于全新设计哲学的重大重构版本。** 
-> 弃用了传统的任务填报逻辑，转向基于 AI 观测的自动化治理架构。
+> **2026 重构版：全平移至 Logseq DB 架构。** 
+> 弃用了云端 Notion，转向基于本地图数据库（Local Graph DB）的自动化治理。
+> 这是一个以 **原子化（Atomization）** 为核心，由 AI Agent 强力驱动的状态机引擎。
 
 ## 🧭 设计哲学：底层实体化，顶层视图化
 
-这套系统只有一个核心信条：**真相只有一份，视角可以有无数个。**
+这套系统致力于解决传统协同工具的“填报滞后”问题。我们通过将工作分解为物理实体的状态变更（Flow），让 AI 能够通过观测图数据库的拓扑结构，自动还原真实的执行进展。
 
-传统任务系统是「填报制」——进度是人说的，状态是人估的，周报是人凭记忆写的。这套系统的目标是「观测制」——AI 通过读取客观的关联数据，自动还原真实发生了什么。
+### ⚙️ 原子化与自动化治理
 
-要实现这一点，必须把「数据的物理归属」和「数据的观察视角」彻底分开。5 个数据库，各司其职，缺一不可。
+**原子化（Atomization）** 是实现自动化治理的唯一前提。当工作被拆解为 `Flow` 并锚定在特定的 `Module`、`Resource` 和 `Information` 上时，AI 就不再是简单的文本生成器，而是一个**状态机计算引擎**：
 
----
-
-### 👤 Resource — 回答「人是谁，能做多少」
-
-这是整个系统的权限边界和带宽上限。Resource 不是通讯录，是带宽模型。它回答的问题是：这个人现在有多少容量，技能边界在哪里，当前状态是 Available 还是 Busy。
-
-目前只有周笑宇一个 Resource，但这条数据是所有关联和 AI 汇报的人格锚点。没有它，Task 没有主语，Initiative 没有发起人，系统退化成一个没有主语的 Todo List。
-
-*   **📌 核心字段**：`Weekly_Capacity`（负载预警基准，少了它 AI 无法判断过载）/ `Status`（分配任务前的门禁）/ `Skills`（任务匹配时的能力过滤条件）。
-*   **✍️ 必填字段**：`Status`（在职/休假只有人能确认）/ `Weekly_Capacity`（受会议假期影响，需定期人工更新）。
+1.  **自动排期 (Automated Scheduling)**：基于 Flow 的带宽需求、Module 的物理约束及 Feature 的逻辑依赖，AI 通过拓扑排序自动推演最佳路径。
+2.  **自动更新状态 (Automated State Updates)**：Flow 代表了 Module 状态的明确变迁。只要关联的代码被 Check 或 Blocked，状态便客观生成，无需人工填报进度。
+3.  **自动汇报 (Automated Reporting)**：AI 沿着 Graph 向上聚合，通过单一批原子数据为 PM、技术、负责人提供完全不同的视图切面。
 
 ---
 
-### 📦 Module — 回答「这件事属于哪个知识域」
+## 🏛 核心五大实体 (5-Entity)
 
-Module 是物理资产，永久存在没有终点。服务器下架、实体管控、建筑、战斗……这些模块不会因项目结束而消失。每个 Module 关联对应知识库（Knowledge_Base_ID），让 AI 能读取模块的架构背景、历史决策和已知坑点。
+### 🌊 Flow (Task) — 「此刻实际在发生什么」
+Task 是最小可执行原子，也是 **Flow** 的具体表现形式。它是系统中最底层的状态迭代路径。
+*   **物理归属**：必须绑定一个 `Module`。
+*   **动能归属**：必须绑定一个 `Resource`。
+*   **协同关系**：通过 `feature:: ((uuid))` 关联逻辑目标。
 
-**每一个 Task 必须归属一个 Module**，这是整个系统最重要的纪律。没有它，Task 漂浮在空中，AI 无法做模块维度健康度分析。
+### 📦 Module (物理域) — 「这件事属于哪个知识域」
+Module 是沉淀状态与资产的静态容器。它有明确的负责人，是所有 Flow 最终作用并发⽣改变的靶点。关联对应的知识库（Knowledge Base），让 AI 拥有架构决策的长期记忆。
 
-*   **📌 核心字段**：`Status`（分配防护网，Deprecated 的模块不得接收新 Task）/ `Knowledge_Base_ID`（AI 的长期记忆，关联模块的知识库，Task 分解时的架构背景与坑点）/ `Type`（技术栈维度分析的分组依据）。
-*   **✍️ 必填字段**：`Name`（模块命名即架构决策）/ `Status`（是否活跃只有负责人知道）/ `Knowledge_Base_ID`（关联对应知识库，是模块知识沉淀的核心入口）。
+### 👤 Resource (带宽池) — 「谁来做，能做多少」
+Resource 不是静态名单，而是系统的动能来源。它定义了执行带宽的上限和技能边界。
 
----
+### ✨ Feature (协同容器) — 「跨模块的协作目标是什么」
+Feature 是 **Flow + Module + Resource + Information** 的结构化集合。它是协作的最小闭环单元，完成后知识将沉回各个相关的 Module。
 
-### ✨ Feature — 回答「当前跨模块的协作目标是什么」
-
-Feature 是有生命周期的临时工作单元，Done 后知识沉回各 Module。它与 Task 有三条清晰界限：
-1.  **「物理性」**：Task 强制绑定单一 Module（物理的），Feature 跨多个 Module（逻辑的），两者不可混用；
-2.  **「交付粒度」**：Task = 一次 Commit 或明确产出，Feature = 可验收的功能闭环；
-3.  **「人员」**：Task = 单人功责，Feature = 多人协作容器。如果一件事需要两人做，必须建 Feature。
-
-没有它，Initiative 和 Task 之间缺中间层，跨模块协作无法收敛。
-
-*   **📌 核心字段**：`Initiative`（少了它 Feature 失去诉求源头，无法回答「为什么做」）/ `Status`（Feature 生命周期状态，AI 汇报当前阶段的依据）。
-*   **✍️ 必填字段**：`Initiative`（需明确协作目标归属）/ `Priority`（P0-P3 是业务判断）/ `Target_Date`（交付承诺，机器无法代替）。
+### 📥 Initiative (宏观诉求) — 「源头是什么，诉求是否被满足」
+Initiative 承担双重职能：作为 Inbox 记录原始诉求，作为顶层视图聚合所有关联的 Feature 与 Task。
 
 ---
 
-### 📥 Inbox & Initiative — 回答「源头是什么，诉求是否被满足」
+## 🛠 技术架构
 
-Initiative 承担双重职能：
-*   **作为 Inbox**：老板的一句话、会议纪要、或个人临时想法，都以 Planning 状态落地，等待分解。
-*   **作为甲方视图**：它聚合关联的 Feature 和 Task，自动回答「这件事现在真实状态是什么」。它不是容器，是镜子。
-
-支持两条路径：「Initiative → Feature → Task」标准三级（适合中大型需求），以及「Initiative → Task」快速通道（适合小事直接执行）。没有它，所有工作平铺无序，AI 无法按目标维度汇报。
-
-*   **📌 核心字段**：`Status`（Planning=Inbox 队列入口，AI 拉取待处理项的唯一信号）/ `Goal`（汇报「是否达成」的判断基准，少了它汇报不成立）/ `AI_Weekly_Summary`（AI 写入汇报快照，系统对甲方的输出终点）。
-*   **✍️ 必填字段**：`Name`（诉求标题）/ `Goal`（成功标准只有发起人能定义）/ `Status`（Planning → Active 是人的决策动作）。
+*   **存储引擎**：[Logseq (DB Version)](https://logseq.com/) - 本地 SQLite 图数据库。
+*   **通信协议**：[Model Context Protocol (MCP)](https://modelcontextprotocol.io/) - 通过 `mcp-logseq` 实现 Agent 与 Graph 的深层交互。
+*   **AI 引擎**：Google Gemini 2.0 / 3.0 系列。
+*   **编排框架**：ADK (Agent Development Kit)。
 
 ---
 
-### ✅ Task — 回答「此刻实际在发生什么」
+## 🚀 快速开始
 
-Task 是最小可执行原子，是整个系统唯一真正发生事情的地方。它同时携带三条关键归属：属于哪个 Module（物理归属）、属于哪个 Feature（阶段归属）、服务于哪个 Initiative（目标归属）。
+### 1. 环境准备
+*   安装 **Logseq (DB 版本)** 并创建一个图形库。
+*   开启 **Settings > API**，生成一个 **API Token**。
+*   确保本地已安装 `uv` 包管理器。
 
-这三条关系让同一个 Task 能被从三个不同视角同时观察到。Task 的状态不靠人填百分比，而靠 todo 的完成数、Block_Reason 的存在与否来客观反映。没有它，其余四库都是空架子。Task 是整个系统的血液。
+### 2. 配置环境
+在根目录下创建 `.env` 文件：
+```bash
+GOOGLE_API_KEY=your_gemini_key
+LOGSEQ_API_TOKEN=your_token_generated_above
+LOGSEQ_API_URL=http://localhost:12315
+LOGSEQ_GRAPH_NAME=your_graph_name
+```
 
-*   **📌 核心字段**：`Module`（物理归属，少了它 AI 无法做模块维度分析，所有 Task 浮在空中）/ `Status`（整个系统唯一的进度信号源，AI 汇报靠聚合它推导）/ `Block_Reason`（存在即报警，是系统主动预警的触发器）。
-*   **✍️ 必填字段**：`Module`（哪块代码被动，只有开发者知道）/ `Resource`（谁来负责，涉及能力匹配和意愿）/ `Estimated_Hours`（工时估算是技术判断，必须由执行人确认）。
+### 3. 运行 Agent
+```bash
+# 启动 Web UI 交互界面
+adk web smart_task_app
+
+# 或者直接运行特定 Agent
+adk run smart_task_app/task_decomposition
+```
 
 ---
 
 ## 🔗 体系联动
 
-**五库缺一不可**：
-*   没有 **Resource** → 任务没有主语。
-*   没有 **Module** → 任务没有物理归属，AI 无法做健康分析。
-*   没有 **Feature** → Module 和 Initiative 断层，短期目标无法收敛。
-*   没有 **Initiative** → 工作平铺，AI 汇报失去视角入口。
-*   没有 **Task** → 其余四库是空架子，系统没有血液。
-
-## 💡 AI 汇报的四种视角
-
-1.  **Resource 视角**：「我本周手上有几个 Task 在 Blocked？」
-2.  **Module 视角**：「建筑模块当前有几个 P0 Bug 未修？」
-3.  **Feature 视角**：「破碎系统优化现在卡在哪里？」
-4.  **Initiative 视角**：「性能优化专项整体进度如何，有什么风险？」
-
-**同一批 Task，被四种视角同时观察。这就是底层实体化、顶层视图化的真实含义。**
+**同一批 Task (Flow)，被四种视角同时观察。这就是底层实体化、顶层视图化的真实含义。**
+1.  **Resource 视角**：查看当前分配给我的带宽利用率。
+2.  **Module 视角**：查看某个技术模块的健康度与待办。
+3.  **Feature 视角**：追踪跨模块功能的交付闭环。
+4.  **Initiative 视角**：全局战略诉求的满足程度。

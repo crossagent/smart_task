@@ -1,0 +1,60 @@
+{
+  "version": "1.2",
+  "architecture": "5-Database (Logseq DB Engine)",
+  "modification_rule": "Always write from CHILD-BLOCK to PARENT-BLOCK or PAGE. Relationships are established via block-properties (double-brackets or parens).",
+  "classes": {
+    "Initiative": {
+      "role": "Grandparent / Request View (Page/Block)",
+      "properties": {
+        "class": "[[Initiative]]",
+        "status": "[[Planning]] | [[Active]] | [[Done]]",
+        "goal": "Description of the request",
+        "ai-summary": "AI generated weekly summary"
+      }
+    },
+    "Feature": {
+      "role": "Parent / Business Goal (Page/Block)",
+      "properties": {
+        "class": "[[Feature]]",
+        "initiative": "Ref to Initiative UUID: ((uuid))",
+        "priority": "P0 | P1 | P2",
+        "status": "[[Active]] | [[Done]]",
+        "target-date": "YYYY-MM-DD"
+      },
+      "relational_logic": "Must link to Initiative UUID upon creation."
+    },
+    "Task": {
+      "role": "Child / Execution Unit (Atomic Flow Block)",
+      "properties": {
+        "class": "[[Task]]",
+        "feature": "Ref to Feature UUID: ((uuid))",
+        "initiative": "Ref to Initiative UUID: ((uuid))",
+        "resource": "Ref to Resource UUID: ((uuid))",
+        "module": "Ref to Module UUID: ((uuid))",
+        "estimated-hours": "Number",
+        "status": "[[Todo]] | [[Doing]] | [[Done]] | [[Blocked]]",
+        "due-date": "YYYY-MM-DD",
+        "block-reason": "Reason if status is Blocked"
+      },
+      "relational_logic": "Must link to Module UUID, Resource UUID, and optionally Feature/Initiative UUID."
+    },
+    "Module": {
+      "role": "Supporting / Physical Asset (Page/Block)",
+      "properties": {
+        "class": "[[Module]]",
+        "status": "[[Active]] | [[Deprecated]]",
+        "kb-id": "Knowledge Base ID",
+        "type": "Technical stack or domain"
+      }
+    },
+    "Resource": {
+      "role": "Supporting / Bandwidth (Page/Block)",
+      "properties": {
+        "class": "[[Resource]]",
+        "status": "[[Available]] | [[Busy]] | [[Away]]",
+        "weekly-capacity": "Number",
+        "skills": "List of skill tags"
+      }
+    }
+  }
+}

@@ -2,16 +2,16 @@ from __future__ import annotations
 import os
 from google.adk.agents import LlmAgent
 from smart_task_app.shared_libraries.constants import MODEL
-from smart_task_app.shared_libraries.schema_loader import load_notion_schema_callback
+from smart_task_app.shared_libraries.schema_loader import load_logseq_schema_callback
 from .tool import fetch_workload_and_resources_tool, apply_scheduling_results_tool
 
 def get_scheduling_instruction(context=None):
-    notion_schema = context.state.get("notion_schema", "Schema not loaded.") if context else "Schema not loaded."
+    logseq_schema = context.state.get("logseq_schema", "Schema not loaded.") if context else "Schema not loaded."
     return f"""
-    You are the "Scheduling Assistant" (排期助手). Your goal is to optimize the project timeline by matching Task demand against Resource bandwidth.
+    You are the "Scheduling Assistant" (排期助手). Your goal is to optimize the project timeline by matching Task demand against Resource bandwidth in the Logseq Graph.
 
-    SCHEMA CONTEXT:
-    {notion_schema}
+    LOGSEQ SCHEMA CONTEXT:
+    {logseq_schema}
 
     WORKFLOW:
     1. **COLLECT**: 
@@ -30,7 +30,7 @@ def get_scheduling_instruction(context=None):
        - **ERROR REPORT**: List tasks missing data first.
        - **SUCCESS PROPOSAL**: Present the proposed schedule in a table.
        - **CONFLICT ALERT**: Explicitly highlight any Feature where `Predicted_End` > `feature_target_date`.
-       - Ask for confirmation: "是否根据有效任务的排期方案更新 Notion 日期？"
+       - Ask for confirmation: "是否根据有效任务的排期方案更新 Logseq 属性？"
 
     4. **COMMIT**:
        - ONLY AFTER the user says "确认" or "好", invoke `apply_scheduling_results`.
@@ -43,9 +43,9 @@ def get_scheduling_instruction(context=None):
 root_agent = LlmAgent(
     name="SchedulingAssistant",
     model=MODEL,
-    description="Agent for calculating realistic timelines based on resource bandwidth and task priority.",
+    description="Agent for calculating realistic timelines based on resource bandwidth and task priority in Logseq.",
     instruction=get_scheduling_instruction,
-    before_agent_callback=[load_notion_schema_callback],
+    before_agent_callback=[load_logseq_schema_callback],
     tools=[
         fetch_workload_and_resources_tool,
         apply_scheduling_results_tool

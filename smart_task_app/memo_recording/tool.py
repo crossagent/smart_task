@@ -2,7 +2,7 @@ import os
 import json
 from google.adk.tools import FunctionTool, ToolContext
 
-from smart_task_app.shared_libraries.notion_util import get_notion_mcp_tool
+from smart_task_app.shared_libraries.logseq_util import get_logseq_mcp_tool
 
 
 def _save_memo_to_state(
@@ -27,9 +27,7 @@ async def format_memo_template(
     related_files: str = "",
     tool_context: ToolContext = None
 ) -> str:
-    """在将备忘录写入Notion之前，提供收集到的信息，生成一个标准的确认模板返回给大模型，大模型借此向用户确认。"""
-    # Persist the draft into session state so downstream tools/agents can read
-    # them without requiring the LLM to re-pass the arguments.
+    """在将备忘录写入 Logseq 之前，提供确认模板。"""
     _save_memo_to_state(tool_context, task_content, background, related_files, requester)
 
     template = f"""
@@ -41,52 +39,37 @@ async def format_memo_template(
 📎 相关文件/链接：{related_files or '无'}
 👤 需求方/发起人：{requester}
 
-请问是否需要修改？或者确认无误后，我将直接写入系统。
+请问是否需要修改？或者确认无误后，我将直接写入 Logseq。
 """
     return template
 
 
 async def _resolve_initiator_id(name: str, tool_context: ToolContext) -> str | None:
-    """Try to find the Resource Page ID for a given initiator name."""
-    resource_db_id = os.environ.get('NOTION_RESOURCE_DATABASE_ID', '32e0d59d-ebb7-8070-a498-000b7430b8b1')
+    """Try to find the Resource UUID for a given initiator name in Logseq."""
     try:
-        data = await _call_notion_tool(
-            "API-query-data-source",
-            {
-                "data_source_id": resource_db_id,
-                "filter": {
-                    "property": "Name",
-                    "title": {"contains": name}
-                }
-            },
+        data = await _call_logseq_tool(
+            "search",
+            {"query": f"class:: [[Resource]] {name}"},
             tool_context
         )
         results = data.get("results", [])
         if results:
-            # Prefer exact match if possible
-            for res in results:
-                props = res.get("properties", {})
-                title_list = props.get("Name", {}).get("title", [])
-                full_name = "".join([t.get("plain_text", "") for t in title_list])
-                if full_name == name:
-                    return res.get("id")
-            return results[0].get("id")
+            return results[0].get("uuid")
     except Exception:
         pass
     return None
 
-async def _call_notion_tool(tool_name: str, args: dict, tool_context: ToolContext):
-    """Proxy call to Notion MCP tools."""
-    notion_toolset = get_notion_mcp_tool()
-    api_tool = None
-    tools = await notion_toolset.get_tools()
-    for tool in tools:
-        if tool.name == tool_name:
-            api_tool = tool
-            break
-    if not api_tool:
-        raise ValueError(f"Notion tool {tool_name} not found")
-    return await api_tool.run_async(args=args, tool_context=tool_context)
+async def _call_logseq_tool(tool_name: str, args: dict, tool_context: ToolContext):
+    """Proxy call to Logseq MCP tools."""
+    toolset = get_logseq_mcp_tool()
+    tools = await toolset.get_tools()
+    target = next((t for t in tools if t.name == tool_name), None)
+    if target is None:
+        raise ValueError(f"Logseq tool {tool_name} not found")
+    res = await target.run_async(args=args, tool_context=tool_context)
+    if hasattr(res, "content"):
+        return json.loads(res.content[0].text)
+    return json.loads(res) if isinstance(res, str) else res
 
 
 async def insert_memo_record(
@@ -96,79 +79,46 @@ async def insert_memo_record(
     related_files: str = "",
     tool_context: ToolContext = None
 ) -> str:
-    """用户确认诉求内容无误后，将其作为 Initiative 记录写入 Notion。"""
+    """用户确认诉求内容无误后，将其作为 Initiative 记录写入 Logseq。"""
     if not requester:
         return "错误：发起人（requester）为必填项，不可为空。"
 
-    initiative_db_id = os.environ.get('NOTION_INITIATIVE_DATABASE_ID', '32e0d59d-ebb7-80c7-88a1-000b493dcc61')
-
     # Resolve Initiator (Resource)
-    initiator_id = await _resolve_initiator_id(requester, tool_context)
+    initiator_uuid = await _resolve_initiator_id(requester, tool_context)
 
-    # 构造 Notion 页面内容
-    children_blocks = []
-    if background:
-        children_blocks.append({
-            "object": "block",
-            "type": "heading_3",
-            "heading_3": {"rich_text": [{"type": "text", "text": {"content": "背景信息"}}]}
-        })
-        children_blocks.append({
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {"rich_text": [{"type": "text", "text": {"content": background}}]}
-        })
-    
-    if related_files:
-        children_blocks.append({
-            "object": "block",
-            "type": "heading_3",
-            "heading_3": {"rich_text": [{"type": "text", "text": {"content": "相关文件/链接"}}]}
-        })
-        children_blocks.append({
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {"rich_text": [{"type": "text", "text": {"content": related_files}}]}
-        })
-        
-    if requester and not initiator_id:
-        children_blocks.append({
-            "object": "block",
-            "type": "heading_3",
-            "heading_3": {"rich_text": [{"type": "text", "text": {"content": "需求方 (未关联)"}}]}
-        })
-        children_blocks.append({
-             "object": "block",
-             "type": "paragraph",
-             "paragraph": {"rich_text": [{"type": "text", "text": {"content": requester}}]}
-        })
-
-    properties = {
-        "Name": {
-            "title": [{"text": {"content": task_content}}]
-        },
-        "Status": {
-            "select": {"name": "Planning"}
-        }
-    }
-
-    if initiator_id:
-        properties["Initiator"] = {"relation": [{"id": initiator_id}]}
-
-    notion_args = {
-        "parent": {
-            "type": "data_source_id",
-            "data_source_id": initiative_db_id
-        },
-        "properties": properties,
-        "children": children_blocks
-    }
-        
     try:
-        result = await _call_notion_tool("API-post-page", notion_args, tool_context)
-        _save_memo_to_state(tool_context, task_content, background, related_files, requester)
-        initiator_status = f"(已关联资源: {requester})" if initiator_id else f"(未找到资源: {requester}，已存入正文)"
-        return f"成功录入甲方诉求 (Initiative)！{initiator_status}\nNotion 返回结果 ID: {result.get('id', 'N/A') if isinstance(result, dict) else 'OK'}"
+        # 1. 创建页面/块
+        page_name = f"Initiative/{task_content[:50]}"
+        data = await _call_logseq_tool(
+            "create_block",
+            {"content": task_content, "parent_page": page_name},
+            tool_context
+        )
+        block_uuid = data.get("uuid")
+
+        # 2. 设置属性
+        properties = {
+            "class": "[[Initiative]]",
+            "status": "[[Planning]]",
+        }
+        if initiator_uuid:
+            properties["initiator"] = f"(({initiator_uuid}))"
+        else:
+            properties["initiator-raw"] = requester
+            
+        if background:
+            properties["background"] = background
+        if related_files:
+            properties["related-files"] = related_files
+
+        for k, v in properties.items():
+            await _call_logseq_tool(
+                "upsert_block_property",
+                {"block_uuid": block_uuid, "property": k, "value": v},
+                tool_context
+            )
+            
+        return f"成功录入甲方诉求 (Initiative)！已存入 Logseq 页面: {page_name}\nUUID: {block_uuid}"
     except Exception as e:
         return f"录入诉求时发生异常：{str(e)}"
 

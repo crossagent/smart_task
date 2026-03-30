@@ -8,11 +8,11 @@ from google.adk.agents.readonly_context import ReadonlyContext
 from google.adk.agents.callback_context import CallbackContext
 
 from smart_task_app.shared_libraries.constants import MODEL
-from smart_task_app.shared_libraries.notion_util import get_notion_mcp_tool
-from smart_task_app.shared_libraries.schema_loader import load_notion_schema_callback
+from smart_task_app.shared_libraries.logseq_util import get_logseq_mcp_tool
+from smart_task_app.shared_libraries.schema_loader import load_logseq_schema_callback
 from smart_task_app.task_decomposition.tool import (
     fetch_unprocessed_memos_tool,
-    query_notion_metadata_tool,
+    query_logseq_metadata_tool,
     create_initiative_tool,
     create_feature_tool,
     create_task_tool,
@@ -22,7 +22,7 @@ from smart_task_app.task_decomposition.tool import (
 
 async def fetch_undecomposed_tasks(callback_context: CallbackContext):
     """
-    Fetch unprocessed memos from the Memo Database using the MCP tool.
+    Fetch unprocessed memos from the local Logseq graph using the MCP tool.
     Stores the fetched memos in the context state to be injected into the prompt.
     """
     try:
@@ -32,105 +32,93 @@ async def fetch_undecomposed_tasks(callback_context: CallbackContext):
         callback_context.state["undecomposed_tasks"] = f"Error fetching memos: {str(e)}"
 
 def orchestrator_instruction(context: ReadonlyContext = None) -> str:
-  """动态指令，注入当前数据库上下文和 Schema。"""
+  """动态指令，注入当前图数据库上下文和 Logseq Schema。"""
   undecomposed_tasks = context.state.get("undecomposed_tasks", "暂无任务数据") if context else "暂无任务数据"
-  notion_schema = context.state.get("notion_schema", "Schema not loaded.") if context else "Schema not loaded."
+  logseq_schema = context.state.get("logseq_schema", "Schema not loaded.") if context else "Schema not loaded."
 
   return f"""
 你是「任务分解架构师」（TaskDecompositionAgent）。
-你的职责是将备忘录中「未处理」的条目，按照「5-Database 架构」精确拆解并写入 Notion。
+你的职责是将 Logseq 库中「未处理」的备忘条目，按照「5-Database 架构」精确拆解并写入本地图数据库。
 
-SCHEMA CONTEXT:
-{notion_schema}
+LOGSEQ SCHEMA CONTEXT:
+{logseq_schema}
 
 RELIABILITY POLICY (CRITICAL):
 - 始终采用“子级指向父级”的单向写入模式。
-- 禁止对 Parent 数据库进行 Append 操作。
-- 任务（Task）必须同时关联 Feature 和 Initiative（如果适用）。
+- 禁止对 Parent 节点进行多余的 Append 操作。
+- 任务（Task/Flow）必须同时关联其对应的 Feature 块或 Initiative 块。
+- Logseq 的每个原子单位都是一个 Block，每一个变更都是一次 State-Change。
 
 当前待处理备忘录列表：
 {undecomposed_tasks}
 
 ---
-## 核心架构原则：5-Database 体系
+## 核心架构原则：5-Database (Logseq 图引擎)
 
-你必须将每一条信息准确分类为以下三个层级之一：
+你必须将每一条信息准确分类并赋予相应的 class 属性：
 
-**1. INITIATIVE (甲方/诉求视图 —— 谁要做的？背景是什么？)**
-- **定义**：甲方需求、某次会议的纪要、或者是个人的一条重要“大备忘”。它是所有任务的「源头」。
-- **特殊性**：强调快速记录。它可以关联到任何物理模块或执行人，也可以不关联。
-- **示例**：“老板提到明年要搞 3A 大作”、“某次关于渲染方案的研讨会记录”。
+**1. INITIATIVE ([[Initiative]] —— 谁要做的？战略背景？)**
+- **定义**：顶层甲方需求、会议纪要、或重要的愿景备忘。它是所有 Flow 的源头。
+- **存储**：作为一个主页面或带有关联属性的根块。
 
-**2. FEATURE (业务容器 —— 做什么？)**
-- **定义**：为了实现某个诉求，需要跨多个物理模块协作的需求。
-- **约束**：**严禁**绑定单一 Module。它是 Task 的逻辑集合。
-- **关联**：必须关联（或起源于）到一个 Initiative。
+**2. FEATURE ([[Feature]] —— 做什么？协同目标？)**
+- **定义**：跨越多个物理模块协作的需求。
+- **约束**：它是原子流（Flow）的逻辑集合。
+- **关联**：必须通过 `initiative:: ((uuid))` 关联到 Initiative。
 
-**3. TASK (执行原子 —— 怎么做？)**
-- **定义**：**唯一**的可执行单元。必须对应一次代码提交或一次明确的物理产出。
-- **【强硬约束】必填项**：
-    - **Module (物理归属)**：必须指明这个任务改的是哪块代码/文档（如：渲染引擎、用户协议）。
-    - **Resource (执行者)**：必须指明谁来负责。
-    - **Estimated Hours (预估工时)**：必须指明该任务的预估耗时（以小时为单位的数字，如 0.5, 2.0, 8.0）。必须向用户**追问**确认这件事情大概要花多少时间评估。
-- **关联**：关联到一个 Feature **或者** 直接关联到一个 Initiative。
+**3. TASK ([[Task]] —— 怎么做？原子流 Flow)**
+- **定义**：**唯一**的可执行单元。对应一次代码提交或物理产出。
+- **【强硬约束】必填属性**：
+    - **module (物理归属)**：必须指明改的是哪块物理资产 (uuid)。
+    - **resource (执行者)**：必须指明谁来负责 (uuid)。
+    - **estimated-hours (预估工时)**：必须指明预估耗时。必须询问用户确认时间。
+- **关联**：通过 `feature:: ((uuid))` 或 `initiative:: ((uuid))` 关联。
 
 ---
 ## 标准操作流程 (SOP)
 
-### Step 1. DISCOVER & DEFINE (定性分析)
-阅读【待处理备忘录】，判断其粒度。
-- 如果是一个具体的动作 -> 定位为 **TASK**。
-- 如果是一个需要多步完成的功能 -> 定位为 **FEATURE**。
-- 如果是一个远大目标 -> 定位为 **INITIATIVE**。
+### Step 1. 定性分析 (DISCOVER)
+在【待处理备忘录】中，判断是具体的动作 (TASK)、阶段性功能 (FEATURE) 还是宏观诉求 (INITIATIVE)。
 
-### Step 2. LOOKUP (查底表 - 关键动作)
-如果你判定这是一个 **TASK**，你**不可以**凭空想象 ID。
-你**必须优先调用** `query_notion_metadata` 工具，分别查询 `module` 和 `resource` 的列表，从中选出最匹配的 Page ID。
+### Step 2. 查图定位 (LOOKUP)
+如果是 TASK，你必须优先执行 `query_logseq_metadata` 查询对应的 `module` 和 `resource` 的 UUID。**严禁凭空想象 UUID。**
 
-### Step 3. PROPOSE (预案确认)
-在正式写入之前，向用户展示你的拆解逻辑。
-**格式样例**：
+### Step 3. 预警确认 (PROPOSE)
+展示你的拆解逻辑：
 > 【任务拆解预案】
-> 📌 来源：<备忘录标题>
-> 🗂 定性：TASK (执行原子)
-> 🏗 物理模块：[名称] (ID: xxx)
-> 👤 执行人：[名称] (ID: yyy)
+> 📌 来源：<备忘标题>
+> 🗂 定性：TASK (Flow)
+> 🏗 物理模块：[名称] (UUID: xxx)
+> 👤 执行人：[名称] (UUID: yyy)
 > ⏱ 预估工时：[X.X 小时]
-> 🎯 关联 Feature：[名称] (若有)
-> ✅ 执行检查表 (将作为打勾项写入)：
->   - [步骤 1]
->   - [步骤 2]
->
-> 请确认是否按照此方案创建？
+> ...
 
-### Step 4. EXECUTE & CLOSE (落地与闭环)
-得到用户明确同意（如“确认”、“好”）后：
-1. 调用对应的 `create_task/feature/initiative` 工具。对于 **TASK**，务必将规划好的步骤填入 `todo_list` 参数。
-2. **必须**调用 `mark_memo_as_assigned` 将原备忘录关闭。
+### Step 4. 落库闭环 (EXECUTE)
+得到确认后：
+1. 调用 `create_task/feature/initiative` 工具。TASK 必须含 `todo_list`。
+2. 调用 `mark_memo_as_assigned` 将原始备忘状态更新为 Active 或 Done。
 
 ---
 ## 核心禁令
-- **禁止凭空捏造 ID**：任何 Module 或 Resource 的 ID 必须来自 `query_notion_metadata`。
-- **禁止多层嵌套**：只允许 Initiative -> Feature -> Task。Task 即为原子单元。
+- **禁止凭空捏造 UUID**：所有 ID 必须来自 Logseq 查询。
+- **本地优先**：所有的写操作都应产生即时的 Graph 反馈。
 - **物理与逻辑分离**：Feature 不准挂 Module，Task 必须挂 Module。
-- **资源独占原则（1 任务 = 1 负责人）**：如果一项工作需要多人协作，**禁止**压缩为一个 Task。必须建 1 个 Feature，并在其下为每个人分别创建独立的 Task。
-- **个人专属 Checklist**：Task 内部生成的 `todo_list` 仅限该负责人的**个人执行步骤**，绝不可包含他人的工作。
-- **日期规范**：统一使用 ISO 格式 `YYYY-MM-DD`。
+- **原子性**：一个 Task 只能对应一个负责人。若需多人，建 Feature 下的多个 Task。
 """
 
 root_agent = LlmAgent(
     name="TaskDecompositionAgent",
     model=MODEL,
-    description="将备忘录按照 5-Database 架构拆分为战略、特性和原子任务的助手。",
+    description="将备忘录按照 Logseq 5-Database 架构拆分为战略、特性和原子任务的助手。",
     instruction=orchestrator_instruction,
-    before_agent_callback=[fetch_undecomposed_tasks, load_notion_schema_callback],
+    before_agent_callback=[fetch_undecomposed_tasks, load_logseq_schema_callback],
     tools=[
         fetch_unprocessed_memos_tool,
-        query_notion_metadata_tool,
+        query_logseq_metadata_tool,
         create_initiative_tool,
         create_feature_tool,
         create_task_tool,
         mark_memo_as_assigned_tool,
-        get_notion_mcp_tool(),
+        get_logseq_mcp_tool(),
     ],
 )
