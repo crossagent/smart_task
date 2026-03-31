@@ -1,58 +1,65 @@
 {
-  "version": "1.2",
+  "version": "1.5",
   "architecture": "5-Database (Logseq DB Engine)",
   "modification_rule": "Always write from CHILD-BLOCK to PARENT-BLOCK or PAGE. Relationships are established via block-properties (double-brackets or parens).",
   "classes": {
-    "Initiative": {
-      "role": "Grandparent / Request View (Page/Block)",
+    "Event": {
+      "role": "Inbox / Request View (Page/Block) - '备忘/事件表'",
       "properties": {
-        "class": "[[Initiative]]",
+        "class": "[[Event]]",
         "status": "[[Planning]] | [[Active]] | [[Done]]",
-        "goal": "Description of the request",
+        "initiator": "Name of the person who requested this",
+        "deadline": "YYYY-MM-DD",
+        "memo-content": "Original description of the request",
         "ai-summary": "AI generated weekly summary"
       }
     },
     "Feature": {
-      "role": "Parent / Business Goal (Page/Block)",
+      "role": "Execution Path / Strategy (Page/Block) - '业务特性'",
       "properties": {
         "class": "[[Feature]]",
-        "initiative": "Ref to Initiative UUID: ((uuid))",
-        "priority": "P0 | P1 | P2",
+        "event": "Ref to Event UUID: ((uuid))",
+        "owner": "Person responsible for this feature delivery",
+        "collaborators": "List of persons with edit authority: [[Person A]], [[Person B]]",
+        "deadline": "YYYY-MM-DD",
+        "benefit": "Core value or expected gain",
         "status": "[[Active]] | [[Done]]",
-        "target-date": "YYYY-MM-DD"
+        "priority": "P0 | P1 | P2"
       },
-      "relational_logic": "Must link to Initiative UUID upon creation."
+      "relational_logic": "Represents the implementation path as a collection of tasks and their dependencies."
     },
     "Task": {
-      "role": "Child / Execution Unit (Atomic Flow Block)",
+      "role": "Atomic Participant (Block) - '最小执行粒子'",
       "properties": {
         "class": "[[Task]]",
+        "event": "Ref to Event UUID: ((uuid))",
         "feature": "Ref to Feature UUID: ((uuid))",
-        "initiative": "Ref to Initiative UUID: ((uuid))",
-        "resource": "Ref to Resource UUID: ((uuid))",
         "module": "Ref to Module UUID: ((uuid))",
+        "resource": "Ref to Resource UUID: ((uuid))",
+        "objective": "Single task goal (Atomic: 1 Goal, 1 Module, 1 Person)",
         "estimated-hours": "Number",
         "status": "[[Todo]] | [[Doing]] | [[Done]] | [[Blocked]]",
-        "due-date": "YYYY-MM-DD",
-        "block-reason": "Reason if status is Blocked"
+        "depends-on": "Ref to Task UUID: ((uuid))",
+        "due-date": "YYYY-MM-DD"
       },
-      "relational_logic": "Must link to Module UUID, Resource UUID, and optionally Feature/Initiative UUID."
+      "relational_logic": "Must link to Module UUID, Resource UUID, and the root Event UUID. Feature link is optional."
     },
     "Module": {
-      "role": "Supporting / Physical Asset (Page/Block)",
+      "role": "Physical Asset / Knowledge Domain (Page/Block) - '物理实体'",
       "properties": {
         "class": "[[Module]]",
+        "module-owner": "Lead responsible for this code/asset domain",
+        "knowledge-base": "Link to documentation, decision records, or blueprints",
         "status": "[[Active]] | [[Deprecated]]",
-        "kb-id": "Knowledge Base ID",
         "type": "Technical stack or domain"
       }
     },
     "Resource": {
-      "role": "Supporting / Bandwidth (Page/Block)",
+      "role": "Bandwidth / Personnel (Page/Block) - '执行人'",
       "properties": {
         "class": "[[Resource]]",
-        "status": "[[Available]] | [[Busy]] | [[Away]]",
         "weekly-capacity": "Number",
+        "status": "[[Available]] | [[Busy]] | [[Away]]",
         "skills": "List of skill tags"
       }
     }
