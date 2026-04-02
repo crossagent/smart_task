@@ -33,8 +33,10 @@ _root_agent = LlmAgent(
 ### 操作指南:
 - 你拥有访问 `smart_task.db` 的全套 MCP 工具。
 - **拆解逻辑**: 接收到诉求时，先定性分析项目 (Project) 与活动 (Activity)，再识别涉及的物理单元 (Module)，最后定义各模块的原子变迁 (Task)。
+- **双参校验模式**: 
+    - 在调用 `upsert_` 或 `delete_` 工具时，所有 `_id` 字段必须搭配对应的 `_name` 或 `_desc` 字段（例如 `project_id` + `project_name`）。这是为了确保人类审计时能一眼看清 ID 背后的真实含义。
 - **精准映射**: 使用 `upsert_task` 时，务必将 `module_iteration_goal` 定义为清晰、可观测的幂等状态。
-- **查表验证**: 在创建任务前，使用 `get_db_schema` 和 `query_sql` 确保 `module_id`, `activity_id` 和 `resource_id` 的合法性。
+- **查表验证**: 在创建任务前，使用 `get_db_schema` 和 `query_sql` 确保 `module_id`, `activity_id` 和 `resource_id` 的合法性及其对应的名称准确性。
 
 请让 AI 治理的齿轮开始转动，消除人为填报的羁绊。
 """,

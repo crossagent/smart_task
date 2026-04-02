@@ -99,7 +99,10 @@ def upsert_resource(
     weekly_capacity: int = 40,
     status: str = "Available"
 ) -> str:
-    """Create or update a Resource (Personnel/执行人)."""
+    """
+    Create or update a Resource (Personnel/执行人).
+    Confirmation: 'name' is the human-readable identifier.
+    """
     sql = """
     REPLACE INTO resources (id, name, dingtalk_id, professional_skill, org_role, weekly_capacity, status)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -107,7 +110,7 @@ def upsert_resource(
     params = (id, name, dingtalk_id, professional_skill, org_role, weekly_capacity, status)
     try:
         execute_mutation(sql, params)
-        return f"Resource '{id}' upserted successfully."
+        return f"Resource '{id}' ({name}) upserted successfully."
     except Exception as e:
         return f"Error upserting resource: {str(e)}"
 
@@ -116,13 +119,18 @@ def upsert_project(
     id: str,
     name: str,
     initiator_res_id: str,
+    initiator_res_name: str,
     memo_content: str,
     status: str = "Planning",
     receiver_res_id: Optional[str] = None,
+    receiver_res_name: Optional[str] = None,
     deadline: Optional[str] = None,
     ai_summary: Optional[str] = None
 ) -> str:
-    """Create or update a Project (Inbox/Root/战略项目池)."""
+    """
+    Create or update a Project (Inbox/Root/战略项目池).
+    Confirmation: 'name', 'initiator_res_name', 'receiver_res_name'.
+    """
     sql = """
     REPLACE INTO projects (id, name, status, initiator_res_id, receiver_res_id, deadline, memo_content, ai_summary)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -130,7 +138,7 @@ def upsert_project(
     params = (id, name, status, initiator_res_id, receiver_res_id, deadline, memo_content, ai_summary)
     try:
         execute_mutation(sql, params)
-        return f"Project '{id}' upserted successfully."
+        return f"Project '{id}' ({name}) upserted successfully."
     except Exception as e:
         return f"Error upserting project: {str(e)}"
 
@@ -139,14 +147,19 @@ def upsert_activity(
     id: str,
     name: str,
     owner_res_id: str,
+    owner_res_name: str,
     project_id: Optional[str] = None,
+    project_name: Optional[str] = None,
     deadline: Optional[str] = None,
     benefit: Optional[str] = None,
     priority: str = "P1",
     artifact_url: Optional[str] = None,
     status: str = "Active"
 ) -> str:
-    """Create or update an Activity (Execution Path/Strategy/执行活动)."""
+    """
+    Create or update an Activity (Execution Path/Strategy/执行活动).
+    Confirmation: 'name', 'owner_res_name', 'project_name'.
+    """
     sql = """
     REPLACE INTO activities (id, name, project_id, owner_res_id, deadline, benefit, priority, artifact_url, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -154,7 +167,7 @@ def upsert_activity(
     params = (id, name, project_id, owner_res_id, deadline, benefit, priority, artifact_url, status)
     try:
         execute_mutation(sql, params)
-        return f"Activity '{id}' upserted successfully."
+        return f"Activity '{id}' ({name}) upserted successfully."
     except Exception as e:
         return f"Error upserting activity: {str(e)}"
 
@@ -163,13 +176,18 @@ def upsert_module(
     id: str,
     name: str,
     owner_res_id: str,
+    owner_res_name: str,
     parent_module_id: Optional[str] = None,
+    parent_module_name: Optional[str] = None,
     knowledge_base: Optional[str] = None,
     layer_type: Optional[str] = None,
     entity_type: str = "Code",
     status: str = "Active"
 ) -> str:
-    """Create or update a Module (Physical Asset/Component Tree/物理实体)."""
+    """
+    Create or update a Module (Physical Asset/Component Tree/物理实体).
+    Confirmation: 'name', 'owner_res_name', 'parent_module_name'.
+    """
     sql = """
     REPLACE INTO modules (id, name, parent_module_id, owner_res_id, knowledge_base, layer_type, entity_type, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -177,7 +195,7 @@ def upsert_module(
     params = (id, name, parent_module_id, owner_res_id, knowledge_base, layer_type, entity_type, status)
     try:
         execute_mutation(sql, params)
-        return f"Module '{id}' upserted successfully."
+        return f"Module '{id}' ({name}) upserted successfully."
     except Exception as e:
         return f"Error upserting module: {str(e)}"
 
@@ -185,10 +203,14 @@ def upsert_module(
 def upsert_task(
     id: str,
     module_id: str,
+    module_name: str,
     resource_id: str,
+    resource_name: str,
     module_iteration_goal: str,
     project_id: Optional[str] = None,
+    project_name: Optional[str] = None,
     activity_id: Optional[str] = None,
+    activity_name: Optional[str] = None,
     estimated_days: float = 0.0,
     status: str = "Todo",
     depends_on: str = "{}",
@@ -199,7 +221,7 @@ def upsert_task(
 ) -> str:
     """
     Create or update a Task (Atomic Participant/最小执行粒子).
-    Tasks are physical-level unit transformations tied to a module and resource.
+    Confirmation: 'module_name', 'resource_name', 'project_name', 'activity_name'.
     """
     sql = """
     REPLACE INTO tasks (
@@ -218,6 +240,55 @@ def upsert_task(
         return f"Task '{id}' upserted successfully."
     except Exception as e:
         return f"Error upserting task: {str(e)}"
+
+# ---------------------------------------------------------------------------
+# Deletion Tools (Requiring Confirmation)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def delete_task(id: str, task_goal_confirmation: str) -> str:
+    """Delete a task by ID. Requires human-readable goal confirmation."""
+    try:
+        count = execute_mutation("DELETE FROM tasks WHERE id = ?", (id,))
+        return f"Deleted {count} task(s) with ID '{id}'."
+    except Exception as e:
+        return f"Error deleting task: {str(e)}"
+
+@mcp.tool()
+def delete_activity(id: str, activity_name_confirmation: str) -> str:
+    """Delete an activity by ID. Requires name confirmation."""
+    try:
+        count = execute_mutation("DELETE FROM activities WHERE id = ?", (id,))
+        return f"Deleted {count} activity/activities with ID '{id}'."
+    except Exception as e:
+        return f"Error deleting activity: {str(e)}"
+
+@mcp.tool()
+def delete_project(id: str, project_name_confirmation: str) -> str:
+    """Delete a project by ID. Requires name confirmation."""
+    try:
+        count = execute_mutation("DELETE FROM projects WHERE id = ?", (id,))
+        return f"Deleted {count} project(s) with ID '{id}'."
+    except Exception as e:
+        return f"Error deleting project: {str(e)}"
+
+@mcp.tool()
+def delete_module(id: str, module_name_confirmation: str) -> str:
+    """Delete a module by ID. Requires name confirmation."""
+    try:
+        count = execute_mutation("DELETE FROM modules WHERE id = ?", (id,))
+        return f"Deleted {count} module(s) with ID '{id}'."
+    except Exception as e:
+        return f"Error deleting module: {str(e)}"
+
+@mcp.tool()
+def delete_resource(id: str, resource_name_confirmation: str) -> str:
+    """Delete a resource by ID. Requires name confirmation."""
+    try:
+        count = execute_mutation("DELETE FROM resources WHERE id = ?", (id,))
+        return f"Deleted {count} resource(s) with ID '{id}'."
+    except Exception as e:
+        return f"Error deleting resource: {str(e)}"
 
 if __name__ == "__main__":
     import argparse
