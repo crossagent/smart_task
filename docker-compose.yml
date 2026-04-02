@@ -1,13 +1,16 @@
 services:
-  socteamcopilot:
-    image: socteamcopilot
+  smart_task_copilot:
+    image: smart_task_copilot
     build:
       context: .
       dockerfile: ./Dockerfile
     ports:
       - 45666:45666
-    container_name: socteamcopilot
+    container_name: smart_task_copilot
     volumes:
       - ./data:/app/data  # 将本地data目录挂载到容器内的/app/data
     environment:
-      - SESSION_DB_URL=sqlite:///./data/sessions.db  # 设置数据库路径到挂载目录
+      - MCP_TRANSPORT=sse
+      - PORT=45666
+      - DATABASE_PATH=/app/data/smart_task.db
+      - SESSION_DB_URL=sqlite:///./data/sessions.db

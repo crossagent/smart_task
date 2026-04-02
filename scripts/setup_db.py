@@ -12,62 +12,78 @@ def main():
     cursor = conn.cursor()
 
     # Tables
-    cursor.execute('''CREATE TABLE IF NOT EXISTS events (
+    cursor.execute('''CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        status TEXT,
-        memo_content TEXT,
-        category TEXT,
-        priority TEXT,
-        due_date TEXT,
-        origin_id TEXT
+        status TEXT DEFAULT 'Planning',
+        initiator_res_id TEXT NOT NULL,
+        receiver_res_id TEXT,
+        deadline TEXT,
+        memo_content TEXT NOT NULL,
+        ai_summary TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )''')
 
-    cursor.execute('''CREATE TABLE IF NOT EXISTS features (
+    cursor.execute('''CREATE TABLE IF NOT EXISTS activities (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        event_id TEXT,
-        owner TEXT,
-        collaborators TEXT,
-        status TEXT,
-        origin_id TEXT,
-        FOREIGN KEY (event_id) REFERENCES events(id)
+        project_id TEXT,
+        owner_res_id TEXT NOT NULL,
+        deadline TEXT,
+        benefit TEXT,
+        priority TEXT DEFAULT 'P1',
+        artifact_url TEXT,
+        status TEXT DEFAULT 'Active',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES projects(id)
     )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS modules (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        status TEXT,
-        owner_id TEXT,
-        description TEXT,
-        type TEXT,
-        origin_id TEXT
+        parent_module_id TEXT,
+        owner_res_id TEXT NOT NULL,
+        knowledge_base TEXT,
+        layer_type TEXT,
+        entity_type TEXT DEFAULT 'Code',
+        status TEXT DEFAULT 'Active',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_module_id) REFERENCES modules(id)
     )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS resources (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        weekly_capacity REAL,
-        status TEXT,
-        skills TEXT,
-        origin_id TEXT
+        dingtalk_id TEXT,
+        professional_skill TEXT,
+        org_role TEXT NOT NULL,
+        weekly_capacity INT DEFAULT 40,
+        status TEXT DEFAULT 'Available',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        event_id TEXT,
-        feature_id TEXT,
-        module_id TEXT,
-        resource_id TEXT,
-        target_state TEXT,
-        estimated_hours REAL,
-        status TEXT,
+        project_id TEXT,
+        activity_id TEXT,
+        module_id TEXT NOT NULL,
+        resource_id TEXT NOT NULL,
+        module_iteration_goal TEXT NOT NULL,
+        estimated_days REAL,
+        status TEXT DEFAULT 'Todo',
         depends_on TEXT,
+        start_date TEXT,
         due_date TEXT,
-        origin_id TEXT,
-        FOREIGN KEY (event_id) REFERENCES events(id),
-        FOREIGN KEY (feature_id) REFERENCES features(id),
+        artifact_url TEXT,
+        redmine_id TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES projects(id),
+        FOREIGN KEY (activity_id) REFERENCES activities(id),
         FOREIGN KEY (module_id) REFERENCES modules(id),
         FOREIGN KEY (resource_id) REFERENCES resources(id)
     )''')

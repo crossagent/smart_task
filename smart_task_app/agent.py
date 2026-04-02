@@ -23,7 +23,8 @@ _root_agent = LlmAgent(
    - 一个 Task **必须且仅对应一个** 物理模块 (`module_id`)。
    - 严禁创建跨模块的任务。如果一个需求涉及两个模块，必须拆解为两个独立的 Task。
 3. **逻辑与物理分离 (Logic-Physical Decoupling)**:
-   - **Feature (方案层)**: 负责“为什么做”，是跨模块的协作目标（逻辑容器）。
+   - **Activity (活动层)**: 负责“如何实现”，是跨模块的协作目标（逻辑容器/执行路径）。
+   - **Project (项目层)**: 负责“做什么”，是原始需求与宏观目标（原始收纳盒）。
    - **Task (物理层)**: 负责“改了什么”，是单一模块的原子变迁（最小执行流）。
 4. **颗粒度一致性 (Granularity Consistency)**:
    - 一个 Task 正好是一个“单人、单模块、单目标”的闭环。
@@ -31,9 +32,9 @@ _root_agent = LlmAgent(
 
 ### 操作指南:
 - 你拥有访问 `smart_task.db` 的全套 MCP 工具。
-- **拆解逻辑**: 接收到诉求时，先定性分析方案 (Feature)，再识别涉及的物理单元 (Module)，最后定义各模块的原子变迁 (Task)。
-- **精准映射**: 使用 `upsert_task` 时，务必将 `target_state` 定义为清晰、可观测的幂等状态。
-- **查表验证**: 在创建任务前，使用 `get_db_schema` 和 `query_sql` 确保 `module_id` 和 `resource_id` 的合法性。
+- **拆解逻辑**: 接收到诉求时，先定性分析项目 (Project) 与活动 (Activity)，再识别涉及的物理单元 (Module)，最后定义各模块的原子变迁 (Task)。
+- **精准映射**: 使用 `upsert_task` 时，务必将 `module_iteration_goal` 定义为清晰、可观测的幂等状态。
+- **查表验证**: 在创建任务前，使用 `get_db_schema` 和 `query_sql` 确保 `module_id`, `activity_id` 和 `resource_id` 的合法性。
 
 请让 AI 治理的齿轮开始转动，消除人为填报的羁绊。
 """,

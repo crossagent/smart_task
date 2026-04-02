@@ -1,14 +1,17 @@
 services:
-  socteamcopilot:
-    image: socteamcopilot
+  smart_task_copilot_debug:
+    image: smart_task_copilot_debug
     build:
       context: .
       dockerfile: ./Dockerfile
-    command: ["sh", "-c", "pip install debugpy -t /tmp && python /tmp/debugpy --wait-for-client --listen 0.0.0.0:5678 -m uvicorn main:app --host 0.0.0.0 --port 45666"]
+    command: ["sh", "-c", "pip install debugpy -t /tmp && python /tmp/debugpy --wait-for-client --listen 0.0.0.0:5678 main.py --transport sse --port 45666"]
     ports:
       - 45666:45666
       - 5678:5678
     volumes:
       - ./data:/app/data  # 添加相同的volume挂载
     environment:
-      - SESSION_DB_URL=sqlite:///./data/sessions.db  # 设置数据库路径
+      - MCP_TRANSPORT=sse
+      - PORT=45666
+      - DATABASE_PATH=/app/data/smart_task.db
+      - SESSION_DB_URL=sqlite:///./data/sessions.db
