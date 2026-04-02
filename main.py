@@ -1,41 +1,41 @@
-from __future__ import annotations
-
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import os
 from typing import Any, Optional
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
-# Constants
-DB_PATH = os.getenv("DATABASE_PATH", "smart_task.db")
-
-# Initialize FastMCP server
-mcp = FastMCP("Smart Task Hub")
-
-# ---------------------------------------------------------------------------
-# Database Helpers
-# ---------------------------------------------------------------------------
+# Constants - PostgreSQL Connection
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "smart_task_hub")
+DB_USER = os.getenv("DB_USER", "smart_user")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "smart_pass")
 
 def get_db_connection():
-    """Create a new database connection."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Create a new PostgreSQL database connection."""
+    return psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD
+    )
 
 def execute_query(query: str, params: tuple = ()) -> list[dict[str, Any]]:
     """Execute a read-only SQL query and return results as a list of dicts."""
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        return [dict(row) for row in cursor.fetchall()]
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
 
 def execute_mutation(query: str, params: tuple = ()) -> int:
     """Execute a mutation SQL (INSERT, UPDATE, DELETE) and return the row count."""
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        conn.commit()
-        return cursor.rowcount
+        with conn.cursor() as cursor:
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.rowcount
 
 # ---------------------------------------------------------------------------
 # Core MCP Tools
@@ -74,14 +74,29 @@ def execute_sql(sql: str) -> str:
 @mcp.tool()
 def get_db_schema() -> str:
     """
-    Retrieve the current database schema, including table names and columns.
-    Essential for understanding the available data structures.
+    Retrieve the current database schema.
+    Essential for understanding the available data structures in PostgreSQL.
     """
-    query = "SELECT sql FROM sqlite_master WHERE type='table';"
+    query = """
+    SELECT table_name, column_name, data_type 
+    FROM information_schema.columns 
+    WHERE table_schema = 'public'
+    ORDER BY table_name, ordinal_position;
+    """
     try:
         results = execute_query(query)
-        schemas = [row["sql"] for row in results if row["sql"]]
-        return "\n\n".join(schemas)
+        if not results:
+            return "No schema information found."
+        
+        output = []
+        current_table = ""
+        for row in results:
+            if row['table_name'] != current_table:
+                current_table = row['table_name']
+                output.append(f"\nTable: {current_table}")
+            output.append(f"  - {row['column_name']} ({row['data_type']})")
+        
+        return "\n".join(output)
     except Exception as e:
         return f"Error fetching schema: {str(e)}"
 
@@ -104,8 +119,15 @@ def upsert_resource(
     Confirmation: 'name' is the human-readable identifier.
     """
     sql = """
-    REPLACE INTO resources (id, name, dingtalk_id, professional_skill, org_role, weekly_capacity, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO resources (id, name, dingtalk_id, professional_skill, org_role, weekly_capacity, status)
+    VALUES (%s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        dingtalk_id = EXCLUDED.dingtalk_id,
+        professional_skill = EXCLUDED.professional_skill,
+        org_role = EXCLUDED.org_role,
+        weekly_capacity = EXCLUDED.weekly_capacity,
+        status = EXCLUDED.status
     """
     params = (id, name, dingtalk_id, professional_skill, org_role, weekly_capacity, status)
     try:
@@ -132,8 +154,16 @@ def upsert_project(
     Confirmation: 'name', 'initiator_res_name', 'receiver_res_name'.
     """
     sql = """
-    REPLACE INTO projects (id, name, status, initiator_res_id, receiver_res_id, deadline, memo_content, ai_summary)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO projects (id, name, status, initiator_res_id, receiver_res_id, deadline, memo_content, ai_summary)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        status = EXCLUDED.status,
+        initiator_res_id = EXCLUDED.initiator_res_id,
+        receiver_res_id = EXCLUDED.receiver_res_id,
+        deadline = EXCLUDED.deadline,
+        memo_content = EXCLUDED.memo_content,
+        ai_summary = EXCLUDED.ai_summary
     """
     params = (id, name, status, initiator_res_id, receiver_res_id, deadline, memo_content, ai_summary)
     try:
@@ -161,8 +191,17 @@ def upsert_activity(
     Confirmation: 'name', 'owner_res_name', 'project_name'.
     """
     sql = """
-    REPLACE INTO activities (id, name, project_id, owner_res_id, deadline, benefit, priority, artifact_url, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO activities (id, name, project_id, owner_res_id, deadline, benefit, priority, artifact_url, status)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        project_id = EXCLUDED.project_id,
+        owner_res_id = EXCLUDED.owner_res_id,
+        deadline = EXCLUDED.deadline,
+        benefit = EXCLUDED.benefit,
+        priority = EXCLUDED.priority,
+        artifact_url = EXCLUDED.artifact_url,
+        status = EXCLUDED.status
     """
     params = (id, name, project_id, owner_res_id, deadline, benefit, priority, artifact_url, status)
     try:
@@ -189,8 +228,16 @@ def upsert_module(
     Confirmation: 'name', 'owner_res_name', 'parent_module_name'.
     """
     sql = """
-    REPLACE INTO modules (id, name, parent_module_id, owner_res_id, knowledge_base, layer_type, entity_type, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO modules (id, name, parent_module_id, owner_res_id, knowledge_base, layer_type, entity_type, status)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        parent_module_id = EXCLUDED.parent_module_id,
+        owner_res_id = EXCLUDED.owner_res_id,
+        knowledge_base = EXCLUDED.knowledge_base,
+        layer_type = EXCLUDED.layer_type,
+        entity_type = EXCLUDED.entity_type,
+        status = EXCLUDED.status
     """
     params = (id, name, parent_module_id, owner_res_id, knowledge_base, layer_type, entity_type, status)
     try:
@@ -224,11 +271,24 @@ def upsert_task(
     Confirmation: 'module_name', 'resource_name', 'project_name', 'activity_name'.
     """
     sql = """
-    REPLACE INTO tasks (
+    INSERT INTO tasks (
         id, project_id, activity_id, module_id, resource_id, 
         module_iteration_goal, estimated_days, status, depends_on, 
         start_date, due_date, artifact_url, redmine_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO UPDATE SET
+        project_id = EXCLUDED.project_id,
+        activity_id = EXCLUDED.activity_id,
+        module_id = EXCLUDED.module_id,
+        resource_id = EXCLUDED.resource_id,
+        module_iteration_goal = EXCLUDED.module_iteration_goal,
+        estimated_days = EXCLUDED.estimated_days,
+        status = EXCLUDED.status,
+        depends_on = EXCLUDED.depends_on,
+        start_date = EXCLUDED.start_date,
+        due_date = EXCLUDED.due_date,
+        artifact_url = EXCLUDED.artifact_url,
+        redmine_id = EXCLUDED.redmine_id
     """
     params = (
         id, project_id, activity_id, module_id, resource_id, 
@@ -249,7 +309,7 @@ def upsert_task(
 def delete_task(id: str, task_goal_confirmation: str) -> str:
     """Delete a task by ID. Requires human-readable goal confirmation."""
     try:
-        count = execute_mutation("DELETE FROM tasks WHERE id = ?", (id,))
+        count = execute_mutation("DELETE FROM tasks WHERE id = %s", (id,))
         return f"Deleted {count} task(s) with ID '{id}'."
     except Exception as e:
         return f"Error deleting task: {str(e)}"
@@ -258,7 +318,7 @@ def delete_task(id: str, task_goal_confirmation: str) -> str:
 def delete_activity(id: str, activity_name_confirmation: str) -> str:
     """Delete an activity by ID. Requires name confirmation."""
     try:
-        count = execute_mutation("DELETE FROM activities WHERE id = ?", (id,))
+        count = execute_mutation("DELETE FROM activities WHERE id = %s", (id,))
         return f"Deleted {count} activity/activities with ID '{id}'."
     except Exception as e:
         return f"Error deleting activity: {str(e)}"
@@ -267,7 +327,7 @@ def delete_activity(id: str, activity_name_confirmation: str) -> str:
 def delete_project(id: str, project_name_confirmation: str) -> str:
     """Delete a project by ID. Requires name confirmation."""
     try:
-        count = execute_mutation("DELETE FROM projects WHERE id = ?", (id,))
+        count = execute_mutation("DELETE FROM projects WHERE id = %s", (id,))
         return f"Deleted {count} project(s) with ID '{id}'."
     except Exception as e:
         return f"Error deleting project: {str(e)}"
@@ -276,7 +336,7 @@ def delete_project(id: str, project_name_confirmation: str) -> str:
 def delete_module(id: str, module_name_confirmation: str) -> str:
     """Delete a module by ID. Requires name confirmation."""
     try:
-        count = execute_mutation("DELETE FROM modules WHERE id = ?", (id,))
+        count = execute_mutation("DELETE FROM modules WHERE id = %s", (id,))
         return f"Deleted {count} module(s) with ID '{id}'."
     except Exception as e:
         return f"Error deleting module: {str(e)}"
@@ -285,7 +345,7 @@ def delete_module(id: str, module_name_confirmation: str) -> str:
 def delete_resource(id: str, resource_name_confirmation: str) -> str:
     """Delete a resource by ID. Requires name confirmation."""
     try:
-        count = execute_mutation("DELETE FROM resources WHERE id = ?", (id,))
+        count = execute_mutation("DELETE FROM resources WHERE id = %s", (id,))
         return f"Deleted {count} resource(s) with ID '{id}'."
     except Exception as e:
         return f"Error deleting resource: {str(e)}"
@@ -296,24 +356,33 @@ if __name__ == "__main__":
     # Allow transport selection via environment variable or command line
     default_transport = os.getenv("MCP_TRANSPORT", "stdio")
     default_port = int(os.getenv("PORT", "45666"))
+    default_host = os.getenv("MCP_HOST", "0.0.0.0") if os.getenv("MCP_TRANSPORT") == "http" else "127.0.0.1"
     
     parser = argparse.ArgumentParser(description="Run the Smart Task MCP Server")
     parser.add_argument(
         "--transport", 
-        choices=["stdio", "sse"], 
+        choices=["stdio", "http"], 
         default=default_transport,
         help=f"Transport to use (default: {default_transport})"
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind to for HTTP (default: 0.0.0.0)"
     )
     parser.add_argument(
         "--port", 
         type=int, 
         default=default_port,
-        help=f"Port for SSE transport (default: {default_port})"
+        help=f"Port for HTTP (default: {default_port})"
     )
     
     args = parser.parse_args()
     
-    if args.transport == "sse":
-        mcp.run(transport="http", host="0.0.0.0", port=args.port)
+    if args.transport == "http":
+        # FastMCP uses transport="streamable-http" for robust bidirectional streaming
+        # Binding to 0.0.0.0 is critical for accessibility from outside Docker
+        print(f"Starting Smart Task Hub on {args.host}:{args.port} using streamable-http...")
+        mcp.run(transport="streamable-http", host=args.host, port=args.port)
     else:
         mcp.run(transport="stdio")

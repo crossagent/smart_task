@@ -28,9 +28,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 EXPOSE 45666
 
 # Set default environment variables for Docker deployment
-ENV MCP_TRANSPORT=sse
+ENV MCP_TRANSPORT=http
 ENV PORT=45666
-ENV DATABASE_PATH=/app/data/smart_task.db
 
 # Use the virtual environment created by uv
 CMD ["/app/.venv/bin/python", "main.py"]

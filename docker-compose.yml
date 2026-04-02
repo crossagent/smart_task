@@ -1,4 +1,18 @@
 services:
+  db:
+    image: postgres:17-alpine
+    container_name: smart_task_db
+    restart: always
+    environment:
+      - POSTGRES_USER=smart_user
+      - POSTGRES_PASSWORD=smart_pass
+      - POSTGRES_DB=smart_task_hub
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_smart_task.sql:/docker-entrypoint-initdb.d/init_smart_task.sql
+    ports:
+      - "5432:5432"
+
   smart_task_copilot:
     image: smart_task_copilot
     build:
@@ -7,10 +21,18 @@ services:
     ports:
       - 45666:45666
     container_name: smart_task_copilot
-    volumes:
-      - ./data:/app/data  # 将本地data目录挂载到容器内的/app/data
+    depends_on:
+      - db
     environment:
-      - MCP_TRANSPORT=sse
+      - MCP_TRANSPORT=http
       - PORT=45666
-      - DATABASE_PATH=/app/data/smart_task.db
-      - SESSION_DB_URL=sqlite:///./data/sessions.db
+      - MCP_HOST=0.0.0.0
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=smart_task_hub
+      - DB_USER=smart_user
+      - DB_PASSWORD=smart_pass
+    restart: on-failure
+
+volumes:
+  postgres_data:
