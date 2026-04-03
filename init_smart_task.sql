@@ -125,7 +125,7 @@ COMMENT ON COLUMN tasks.artifact_url IS 'URL to the deliverable artifact (Doc/As
 
 -- 8. Activity Collaborators Table - '访问控制' (Access Control)
 CREATE TABLE IF NOT EXISTS activity_collaborators (
-    id GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     activity_id VARCHAR(50) NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
     resource_id VARCHAR(50) NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,

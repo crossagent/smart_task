@@ -6,6 +6,18 @@ from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+import json
+from datetime import datetime, date
+from decimal import Decimal
+
+class CustomEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle datetime, date, and Decimal objects."""
+    def default(self, obj):
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
 
 # Constants - PostgreSQL Connection
 DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -15,13 +27,17 @@ DB_USER = os.getenv("DB_USER", "smart_user")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "smart_pass")
 
 def get_db_connection():
-    """Create a new PostgreSQL database connection."""
+    """Create a new PostgreSQL database connection using current environment variables."""
+    host = os.getenv("DB_HOST", "localhost")
+    port = os.getenv("DB_PORT", "5432")
+    dbname = os.getenv("DB_NAME", "smart_task_hub")
+    # print(f"> [get_db_connection] {host}:{port}/{dbname}")
     return psycopg2.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD
+        host=host,
+        port=port,
+        dbname=dbname,
+        user=os.getenv("DB_USER", "smart_user"),
+        password=os.getenv("DB_PASSWORD", "smart_pass")
     )
 
 def execute_query(query: str, params: tuple = ()) -> list[dict[str, Any]]:
@@ -71,8 +87,7 @@ def query_sql(sql: str) -> str:
         results = execute_query(sql)
         if not results:
             return "No results found."
-        import json
-        return json.dumps(results, indent=2, ensure_ascii=False)
+        return json.dumps(results, indent=2, ensure_ascii=False, cls=CustomEncoder)
     except Exception as e:
         return f"Database Error: {str(e)}"
 

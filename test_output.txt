@@ -1,0 +1,180 @@
+﻿>>> [conftest] Using DB_NAME: smart_task_test
+============================= test session starts =============================
+platform win32 -- Python 3.13.2, pytest-9.0.2, pluggy-1.6.0 -- D:\MyProject\smart_task\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\MyProject\smart_task
+configfile: pyproject.toml
+plugins: anyio-4.10.0
+collecting ... collected 4 items
+
+tests/test_mcp_ops.py::test_db_connection > [get_db_connection] localhost:5433/smart_task_test
+
+>>> Active DB: smart_task_test
+PASSED
+tests/test_mcp_ops.py::test_query_sql_validation PASSED
+tests/test_mcp_ops.py::test_resource_upsert_and_query > [get_db_connection] localhost:5433/smart_task_test
+> [get_db_connection] localhost:5433/smart_task_test
+FAILED
+tests/test_mcp_ops.py::test_full_chain_upsert > [get_db_connection] localhost:5433/smart_task_test
+> [get_db_connection] localhost:5433/smart_task_test
+> [get_db_connection] localhost:5433/smart_task_test
+> [get_db_connection] localhost:5433/smart_task_test
+> [get_db_connection] localhost:5433/smart_task_test
+FAILED
+
+================================== FAILURES ===================================
+_______________________ test_resource_upsert_and_query ________________________
+
+resource_id = 'RES-TEST-8e8c040f'
+
+    def test_resource_upsert_and_query(resource_id):
+        """Test creating a resource and querying it."""
+        # 1. Upsert
+        msg = upsert_resource(
+            id=resource_id,
+            name="Test User",
+            org_role="Tester",
+            weekly_capacity=40
+        )
+        assert "upserted successfully" in msg
+    
+        # 2. Query via SQL
+        sql = f"SELECT * FROM resources WHERE id = '{resource_id}'"
+        results_json = query_sql(sql)
+        try:
+>           results = json.loads(results_json)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_mcp_ops.py:55: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\zxy19\AppData\Roaming\uv\python\cpython-3.13.2-windows-x86_64-none\Lib\json\__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\zxy19\AppData\Roaming\uv\python\cpython-3.13.2-windows-x86_64-none\Lib\json\decoder.py:345: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.decoder.JSONDecoder object at 0x000001F26089B8C0>
+s = 'Database Error: Object of type datetime is not JSON serializable', idx = 0
+
+    def raw_decode(self, s, idx=0):
+        """Decode a JSON document from ``s`` (a ``str`` beginning with
+        a JSON document) and return a 2-tuple of the Python
+        representation and the index in ``s`` where the document ended.
+    
+        This can be used to decode a JSON document from a string that may
+        have extraneous data at the end.
+    
+        """
+        try:
+            obj, end = self.scan_once(s, idx)
+        except StopIteration as err:
+>           raise JSONDecodeError("Expecting value", s, err.value) from None
+E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+C:\Users\zxy19\AppData\Roaming\uv\python\cpython-3.13.2-windows-x86_64-none\Lib\json\decoder.py:363: JSONDecodeError
+
+During handling of the above exception, another exception occurred:
+
+resource_id = 'RES-TEST-8e8c040f'
+
+    def test_resource_upsert_and_query(resource_id):
+        """Test creating a resource and querying it."""
+        # 1. Upsert
+        msg = upsert_resource(
+            id=resource_id,
+            name="Test User",
+            org_role="Tester",
+            weekly_capacity=40
+        )
+        assert "upserted successfully" in msg
+    
+        # 2. Query via SQL
+        sql = f"SELECT * FROM resources WHERE id = '{resource_id}'"
+        results_json = query_sql(sql)
+        try:
+            results = json.loads(results_json)
+        except json.JSONDecodeError:
+>           pytest.fail(f"Expected JSON from query_sql, but got: {results_json}")
+E           Failed: Expected JSON from query_sql, but got: Database Error: Object of type datetime is not JSON serializable
+
+tests\test_mcp_ops.py:57: Failed
+___________________________ test_full_chain_upsert ____________________________
+
+resource_id = 'RES-TEST-b1ed3366', project_id = 'PRJ-TEST-219897ef'
+module_id = 'MOD-TEST-7b429d77'
+
+    def test_full_chain_upsert(resource_id, project_id, module_id):
+        """Test a full chain of dependencies (Resource -> Project -> Module -> Task)."""
+        # 1. Resource
+        upsert_resource(id=resource_id, name="Chain Owner", org_role="Architect")
+    
+        # 2. Project
+        msg_prj = upsert_project(
+            id=project_id,
+            name="Test Chain Project",
+            initiator_res_id=resource_id,
+            initiator_res_name="Chain Owner",
+            memo_content="Testing dependencies"
+        )
+        assert "upserted successfully" in msg_prj
+    
+        # 3. Module
+        msg_mod = upsert_module(
+            id=module_id,
+            name="Test Module",
+            owner_res_id=resource_id,
+            owner_res_name="Chain Owner"
+        )
+        assert "upserted successfully" in msg_mod
+    
+        # 4. Task
+        task_id = f"TSK-TEST-{uuid.uuid4().hex[:8]}"
+        msg_tsk = upsert_task(
+            id=task_id,
+            module_id=module_id,
+            module_name="Test Module",
+            resource_id=resource_id,
+            resource_name="Chain Owner",
+            module_iteration_goal="Complete TDD setup"
+        )
+        assert "upserted successfully" in msg_tsk
+    
+        # 5. Verify task relationship
+>       results = json.loads(query_sql(f"SELECT * FROM tasks WHERE id = '{task_id}'"))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_mcp_ops.py:100: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\zxy19\AppData\Roaming\uv\python\cpython-3.13.2-windows-x86_64-none\Lib\json\__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\zxy19\AppData\Roaming\uv\python\cpython-3.13.2-windows-x86_64-none\Lib\json\decoder.py:345: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.decoder.JSONDecoder object at 0x000001F26089B8C0>
+s = 'Database Error: Object of type Decimal is not JSON serializable', idx = 0
+
+    def raw_decode(self, s, idx=0):
+        """Decode a JSON document from ``s`` (a ``str`` beginning with
+        a JSON document) and return a 2-tuple of the Python
+        representation and the index in ``s`` where the document ended.
+    
+        This can be used to decode a JSON document from a string that may
+        have extraneous data at the end.
+    
+        """
+        try:
+            obj, end = self.scan_once(s, idx)
+        except StopIteration as err:
+>           raise JSONDecodeError("Expecting value", s, err.value) from None
+E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+C:\Users\zxy19\AppData\Roaming\uv\python\cpython-3.13.2-windows-x86_64-none\Lib\json\decoder.py:363: JSONDecodeError
+=========================== short test summary info ===========================
+FAILED tests/test_mcp_ops.py::test_resource_upsert_and_query - Failed: Expect...
+FAILED tests/test_mcp_ops.py::test_full_chain_upsert - json.decoder.JSONDecod...
+========================= 2 failed, 2 passed in 0.98s =========================
