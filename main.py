@@ -4,6 +4,8 @@ import os
 from typing import Any, Optional
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 
 # Constants - PostgreSQL Connection
 DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -38,8 +40,23 @@ def execute_mutation(query: str, params: tuple = ()) -> int:
             return cursor.rowcount
 
 # ---------------------------------------------------------------------------
-# Core MCP Tools
+# FastMCP Server Initialization
 # ---------------------------------------------------------------------------
+
+# Initialize FastMCP server
+mcp = FastMCP("Smart Task Hub")
+
+
+# Define CORS middleware to allow all origins, solving "Permission" issues
+# for cross-origin or containerized web-client connections.
+mcp_middleware = [
+    Middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+]
 
 @mcp.tool()
 def query_sql(sql: str) -> str:
@@ -383,6 +400,11 @@ if __name__ == "__main__":
         # FastMCP uses transport="streamable-http" for robust bidirectional streaming
         # Binding to 0.0.0.0 is critical for accessibility from outside Docker
         print(f"Starting Smart Task Hub on {args.host}:{args.port} using streamable-http...")
-        mcp.run(transport="streamable-http", host=args.host, port=args.port)
+        mcp.run(
+            transport="streamable-http", 
+            host=args.host, 
+            port=args.port,
+            middleware=mcp_middleware
+        )
     else:
         mcp.run(transport="stdio")

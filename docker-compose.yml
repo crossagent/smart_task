@@ -11,7 +11,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init_smart_task.sql:/docker-entrypoint-initdb.d/init_smart_task.sql
     ports:
-      - "5432:5432"
+      - "5433:5432"
 
   smart_task_copilot:
     image: smart_task_copilot
