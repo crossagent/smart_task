@@ -21,11 +21,13 @@ STH 当前已有完善的任务管理中枢：五层数据模型（Project → A
 
 ## 2. 核心设计原则
 
-**Resource = Remote Agent**：STH 的 `resource` 表不只是"人"，也是 agent 实例的注册表。每个 remote agent 在 `resource` 表中有一条记录，包含其 endpoint 和能力类型。未来扩展新能力只需注册新的 resource 条目，框架不变。
+**Resource = Agent 槽位（工厂模板）**：STH 的 `resource` 表存储的不是常驻服务的 endpoint，而是创建 agent 所需的**模板定义**——用什么 prompt、挂载哪些 tools、工作空间在哪里。Agent 进程是按需动态创建、执行完即销毁的，工作空间（git clone 目录）是预先置备好的持久资产。有多少个预置工作空间，就能并发多少个同类 agent。
 
 **Task 状态机是协调中枢**：agent 之间不直接通信，通过 task 状态的流转做隐式协调。STH 是唯一的事实来源。
 
 **三层溯源**：Coder agent 拿到 task 后，可沿 `task → activity → project` 溯源完整的业务意图，不只是执行原子指令。
+
+**上下文注入而非硬编码**：agent 的 prompt 是固定模板，task_id 作为运行时上下文注入。同一套模板可被不同 task 复用，agent 行为由注入的上下文决定。
 
 ---
 
@@ -88,7 +90,7 @@ STH 当前已有完善的任务管理中枢：五层数据模型（Project → A
 |---|---|
 | **类型** | 内置轻量级服务（不是 LLM agent） |
 | **触发** | Task 状态变更事件 |
-| **职责** | 纯图遍历，零业务逻辑 |
+| **职责** | 纯图遍历 + agent 实例化，零业务逻辑 |
 
 **逻辑**：
 ```
@@ -96,24 +98,44 @@ STH 当前已有完善的任务管理中枢：五层数据模型（Project → A
   查询所有 depends_on 包含此 task_id 的下游 task
   对每个下游 task:
     检查其所有前置 task 是否全部 done
-    若是: 将该 task 状态改为 ready
-          调用 task.resource.endpoint（Remote Agent）
+    若是:
+      将该 task 状态改为 ready
+      读取 task.resource → 获取模板定义
+      动态创建 agent 实例，注入 task_id 上下文
+      在 resource.workspace_path 下执行
+      执行完毕后销毁进程，释放 is_available
 ```
 
-**人工介入点**：人工在 Activity 粒度审核整条 task 路径后"放行"，Scheduler 才开始对该 Activity 下的 task 进行自动推进。人工可随时暂停某条路径。
+**人工介入点**：人工在 Activity 粒度审核整条 task 路径后"放行"，Scheduler 才开始对该 Activity 下的 task 进行自动推进。人工可随时将任意 task 标记为 `blocked` 暂停路径。
 
 ---
 
 ## 4. Resource 表扩展
 
-当前 `resource` 表需要新增字段以支持 agent 注册：
+Resource 表从"人员登记册"扩展为"agent 槽位注册表"。每条记录描述一个可被 Scheduler 实例化的能力槽位：
 
 | 新增字段 | 类型 | 说明 |
 |---|---|---|
 | `resource_type` | VARCHAR | `human` / `architect` / `coder` / 未来扩展 |
-| `agent_endpoint` | VARCHAR | Remote Agent 的 A2A endpoint URL，human 类型为空 |
-| `workspace_path` | VARCHAR | agent 本地 git clone 目录，human 类型为空 |
-| `is_available` | BOOLEAN | 当前是否可接受新 task dispatch |
+| `prompt_template` | VARCHAR | prompt 模板文件路径，human 类型为空 |
+| `tools_config` | JSONB | 该槽位挂载的 tools 列表，human 类型为空 |
+| `workspace_path` | VARCHAR | 预置的 git clone 目录，human 类型为空 |
+| `is_available` | BOOLEAN | 当前工作空间是否空闲，可接受新 task |
+
+**实例化流程**：
+
+```
+Scheduler 触发 dispatch:
+  1. 读取 task.resource_id → 拿到 Resource 记录
+  2. 读取 prompt_template + tools_config
+  3. 将 task_id 注入 prompt 上下文
+  4. 动态创建 LlmAgent(prompt=rendered_template, tools=tools_config)
+  5. 在 workspace_path 下运行 agent
+  6. agent 执行完毕 → 进程销毁
+  7. 更新 resource.is_available = true
+```
+
+扩展新能力只需在 `resource` 表新增一条记录（指向新的 prompt 模板和 workspace），无需修改 Scheduler 逻辑。
 
 ---
 
