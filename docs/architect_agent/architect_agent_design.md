@@ -1,18 +1,22 @@
-# 模块设计文档：`architect_agent` (架构师大脑引擎)
+# 模块设计文档：`architect_agent` (全案架构师引擎)
 
-## 1. 模块定位
-`architect_agent` 是挂载在物理目录 `smart_task_app/agents/architect` 中的具体能力落地模块。它属于 ADK 标准 Agent 实现，专门承担在项目早期与用户交流，拆解目标、设计图纸，并向系统写入执行大纲（Task 蓝图）的顶层大脑角色。
+## 1. 模块定义 (Module Definition)
+`architect_agent` 是项目的战略设计中心，作为一个基于 ADK 的高阶逻辑智能体存放在 `smart_task_app/agents/architect`。它的核心功能是理解复杂的业务蓝图，将其拆解为具备逻辑依赖的任务链（DAG 图），并固化设计规范文档。
 
-## 2. 系统核心职责
-- **业务需求抽象**：与客户或其他外部环境输入对接，了解开发需求，提炼技术难点。
-- **项目/资产初始化**：直接调用并联通系统的 `task_management` 层 API。创建具体的 `project`, `activity`, `module`, 到微观的 `tasks` 并组装 `depends_on` 的图执行拓扑逻辑。
-- **设计稿落地**：利用 `execute_shell` 抑或系统文件写入能力（视当前工作空间 `SMART_WORKSPACE_PATH` 配置而定），将沟通结果、需求蓝图直接固化为 Markdown 或者 Mermaid 图表，为后续执行者铺路（存放于 `docs/` 下的各个同名子域）。
-- **交接与反馈**：当所有模块前置规划梳理完毕，它会自动在主流程中确认自身任务完结向 `mcp_server` 的路由发送结束信号（反馈 `status='code_done'`）。
+## 2. 模块接口 (Module Interface)
+- **输入 (Input)**：
+    - 运行时的环境变量 `SMART_TASK_ID`（唯一的任务上下文指针）。
+    - 现有的数据库快照（Project, Activity 的背景）。
+    - 用户关于功能的初步构想或原始任务目标。
+- **输出 (Output)**：
+    - 在数据库中创建的多个 `tasks` 记录（JSON 格式）。
+    - 在工作区 `docs/` 下落地的 Markdown 形式设计规范与子域规格书。
+    - 任务完成标记（反馈到系统状态机的 `code_done` 信号）。
 
-## 3. 设计原则
-- **不触碰业务代码**：它的权限可以进行探索，但严禁向具体的 `src/` 写逻辑代码。
-- **高阶抽象要求**：由于被定义为"架构师"身份，Prompt 指令内着重强调了 "Design Pattern, Modularization, Decoupling, Interface-first" 的强制思考流要求。
-
-## 4. 驱动与上下文依赖
-- 它的唤醒全凭调度引擎通过 `uv run adk run smart_task_app/agents/architect` 的命令行触发。
-- 初始化时必须承接操作系统的 `SMART_TASK_ID` 来溯源环境信息。
+## 3. 模块流程 (Module Flow)
+1. **上下文回溯**：启动后，第一时间利用 `SMART_TASK_ID` 查询数据库，还原自己在此项目中的当前角色和任务位置。
+2. **逻辑拆解**：根据目标任务大纲，自主思考将其细分为多个高内聚、低耦合的子任务。
+3. **依赖编排**：设计子任务之间的 `depends_on` 逻辑。确保代码开发任务位于架构设计任务之后。
+4. **物料写入 (Writeback)**：循环调用系统的 `upsert_task` 和 `upsert_module` 工具，将任务节点持久化。
+5. **文档固化**：在本地工作区创建具体的领域文件夹，并根据子任务的分配方案，为未来的 Coder Agent 留下详细的实现说明书。
+6. **流程完结**：自检所有规划已同步到 DB 后，主动标记自己为 `code_done`，交出执行权。

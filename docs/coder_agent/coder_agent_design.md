@@ -1,18 +1,22 @@
-# 模块设计文档：`coder_agent` (开发流水线引擎)
+# 模块设计文档：`coder_agent` (搬砖迭代引擎)
 
-## 1. 模块定位
-`coder_agent` 存放在 `smart_task_app/agents/coder` 中。它是一个 ADK 标准 Agent 实现，也是整个 Smart Task Hub 底层架构中真正“弄脏手去搬砖”的终点执行端点。
+## 1. 模块定义 (Module Definition)
+`coder_agent` 是 Smart Task Hub 的具体实施单元，存放在 `smart_task_app/agents/coder`。它的核心功能是承接架构师设计的子任务，在受控的物理工作区内进行真机代码编写、单元测试及其 Git 提交。
 
-## 2. 核心职责
-- **阅读环境与文档**：承接被分配到的特定迭代目标 (`module_iteration_goal`)，在工作区中利用 `grep`、`cat`、甚至直接读取 `architect` 写在 `docs/<module>/` 里的 Markdown 来重建当前大脑认知结构。
-- **代码实施**：直接动用代码生成能力，创建 `src/` 目录下的业务逻辑，更新依赖、修改表结构、注入路由。
-- **执行 TDD 测试**：不仅要写代码，还要自行跑终端命令行拉取 `pytest`。通过对所做出的模块测试来证明代码逻辑的可用性并确保自己没出错。
-- **版本控制与自我完结**：一切改动自测无误后，负责执行 `git add/commit`，并通过外部调令更新中央数据库状态为 `code_done`。
+## 2. 模块接口 (Module Interface)
+- **输入 (Input)**：
+    - 运行时环境变量 `SMART_TASK_ID`。
+    - 指向特定物理工作区的 `SMART_WORKSPACE_PATH`。
+    - 架构师之前生成的、与该任务相关的子域设计文档（Markdown）。
+- **输出 (Output)**：
+    - 在 `src/` 目录中真实生成的业务逻辑文件（Python, SQL 等）。
+    - 运行全量模块测试后得到的终端回传。
+    - 带有任务编号的 Git 提交消息。
 
-## 3. 工具装备配置
-它预设被装载以下标准能力簇：
-- **`query_context`**: 查阅自己的来龙去脉（我属于什么任务？谁分配我的？）。
-- **`execute_shell`**：通过子进程或者直接 `os.system` 与操作系统的终端建立信任联系，发起任意 bash / powershell 指令（基于工作区限制）。
-
-## 4. 并发解耦隔离性
-由于 `coder_agent` 往往属于被大规模横向扩展调用的群体（例如通过生成 5 个平行的子进程同时跑 5 个 task），它的核心安全性来自于前置 `architect_agent` 划分出的独立微模块（比如一个 coder 只准动 `mcp_server` 的文件，另一个 coder 只能改 `task_execution` 的文件）。只要顶层图依赖切得清楚，底层多个 `coder` 绝不打架。
+## 3. 模块流程 (Module Flow)
+1. **现状认知**：读取环境变量，根据任务 ID 从数据库调取当前需要完成的“迭代目标”。
+2. **环境探测**：通过 `grep`, `ls` 等工具观察此时工作区的代码现状与架构师给出的 Markdown 规范。
+3. **分阶段实施**：先编写代码骨架，并同步编写对应的 `tests/` 下的单元测试用例。
+4. **自检循环 (TDD)**：在受控终端发起 `pytest` 指令。如果报错，则原地进行 Debug 与代码重构，直至通过。
+5. **版本快照**：调用 `git add/commit` 将工作成果固化在当前分支。
+6. **任务完结**：通过 MCP Tooling 将数据库任务状态置为 `code_done`，释放资源。
