@@ -3,6 +3,7 @@ import uuid
 import json
 from src.task_management.tools import (
     query_sql, 
+    get_task_context,
     upsert_resource, 
     upsert_project, 
     upsert_activity, 
@@ -10,7 +11,7 @@ from src.task_management.tools import (
     upsert_task,
     delete_record
 )
-from src.task_management.db import execute_mutation
+from src.task_management.db import execute_mutation, execute_query
 
 @pytest.fixture
 def resource_id():
@@ -104,3 +105,68 @@ def test_full_chain_upsert(resource_id, project_id, module_id):
     results = json.loads(query_sql(f"SELECT * FROM tasks WHERE id = '{task_id}'"))
     assert results[0]["module_id"] == module_id
     assert results[0]["project_id"] == project_id
+
+def test_custom_json_encoder():
+    """Verify that datetime and decimal are correctly encoded in query_sql."""
+    # Insert a dummy task with created_at and priority (decimal might need a numeric field)
+    # We can just select current_timestamp and a numeric literal
+    sql = "SELECT CURRENT_TIMESTAMP as now, 123.45::numeric as val"
+    results_json = query_sql(sql)
+    results = json.loads(results_json)
+    
+    assert "now" in results[0]
+    assert isinstance(results[0]["now"], str) # ISO format string
+    assert results[0]["val"] == 123.45
+
+def test_task_context_resolution(resource_id, project_id, module_id):
+    """Verify that get_task_context returns full joined information."""
+    # 1. Setup chain
+    upsert_resource(id=resource_id, name="Context King", org_role="Architect")
+    upsert_project(id=project_id, name="Context Project", owner_res_id=resource_id)
+    upsert_module(id=module_id, project_id=project_id, name="Context Module", owner_res_id=resource_id)
+    
+    task_id = f"TSK-CTX-{uuid.uuid4().hex[:8]}"
+    upsert_task(
+        id=task_id,
+        project_id=project_id,
+        module_id=module_id,
+        module_name="Context Module",
+        resource_id=resource_id,
+        resource_name="Context King",
+        module_iteration_goal="Test context join"
+    )
+    
+    # 2. Get Context
+    context_json = get_task_context(task_id)
+    ctx = json.loads(context_json)
+    
+    assert ctx["task_id"] == task_id
+    assert ctx["project_name"] == "Context Project"
+    assert ctx["module_name"] == "Context Module"
+    assert ctx["module_iteration_goal"] == "Test context join"
+
+def test_upsert_atomic_conflict(resource_id, module_id):
+    """Verify that multiple upserts to the same ID update fields correctly."""
+    upsert_resource(id=resource_id, name="Conflict Hero", org_role="Coder")
+    upsert_module(id=module_id, project_id="NONE", name="Conflict Mod", owner_res_id=resource_id)
+    
+    task_id = f"TSK-CONFLICT-{uuid.uuid4().hex[:8]}"
+    
+    # First Upsert
+    upsert_task(
+        id=task_id, module_id=module_id, module_name="M1", 
+        resource_id=resource_id, resource_name="R1",
+        module_iteration_goal="Goal 1", status="pending"
+    )
+    
+    # Second Upsert (Update status and goal)
+    upsert_task(
+        id=task_id, module_id=module_id, module_name="M1", 
+        resource_id=resource_id, resource_name="R1",
+        module_iteration_goal="Goal 2", status="ready"
+    )
+    
+    # Verify values
+    results = json.loads(query_sql(f"SELECT * FROM tasks WHERE id = '{task_id}'"))
+    assert results[0]["module_iteration_goal"] == "Goal 2"
+    assert results[0]["status"] == "ready"

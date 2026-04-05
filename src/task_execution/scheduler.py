@@ -110,6 +110,14 @@ def run_agent_subprocess(task_id: str, res_id: str, agent_dir: str, workspace_pa
                 print(f"[{res_id}] {line}", end="")
             process.wait()
             
+            if process.returncode != 0:
+                execute_mutation("UPDATE tasks SET status = 'failed' WHERE id = %s", (task_id,))
+                print(f">>> [Scheduler] Task {task_id} FAILED (Exit code: {process.returncode})")
+            else:
+                # Safety net: if agent didn't update status, mark as code_done
+                execute_mutation("UPDATE tasks SET status = 'code_done' WHERE id = %s AND status = 'in_progress'", (task_id,))
+                print(f">>> [Scheduler] Task {task_id} completed successfully.")
+            
     except Exception as e:
         print(f"    [Agent Runner] Error running agent for task {task_id}: {e}")
     finally:
