@@ -1,16 +1,16 @@
 import pytest
 import uuid
 import json
-from main import (
+from src.task_management.tools import (
     query_sql, 
-    execute_sql, 
     upsert_resource, 
     upsert_project, 
     upsert_activity, 
     upsert_module, 
     upsert_task,
-    delete_resource
+    delete_record
 )
+from src.task_management.db import execute_mutation
 
 @pytest.fixture
 def resource_id():
@@ -35,7 +35,7 @@ def test_db_connection():
 def test_query_sql_validation():
     """Verify that query_sql only allows SELECT."""
     result = query_sql("DROP TABLE resources;")
-    assert "Only SELECT queries are allowed" in result
+    assert "Only read-only queries" in result
 
 def test_resource_upsert_and_query(resource_id):
     """Test creating a resource and querying it."""
@@ -43,10 +43,12 @@ def test_resource_upsert_and_query(resource_id):
     msg = upsert_resource(
         id=resource_id,
         name="Test User",
+        resource_type="coder",
+        agent_dir="smart_task_app/agents/coder",
         org_role="Tester",
         weekly_capacity=40
     )
-    assert "upserted successfully" in msg
+    assert "Successfully processed" in msg
     
     # 2. Query via SQL
     sql = f"SELECT * FROM resources WHERE id = '{resource_id}'"
@@ -59,6 +61,7 @@ def test_resource_upsert_and_query(resource_id):
     assert len(results) == 1
     assert results[0]["name"] == "Test User"
     assert results[0]["org_role"] == "Tester"
+    assert results[0]["agent_dir"] == "smart_task_app/agents/coder"
 
 def test_full_chain_upsert(resource_id, project_id, module_id):
     """Test a full chain of dependencies (Resource -> Project -> Module -> Task)."""
@@ -69,34 +72,33 @@ def test_full_chain_upsert(resource_id, project_id, module_id):
     msg_prj = upsert_project(
         id=project_id,
         name="Test Chain Project",
-        initiator_res_id=resource_id,
-        initiator_res_name="Chain Owner",
+        owner_res_id=resource_id,
         memo_content="Testing dependencies"
     )
-    assert "upserted successfully" in msg_prj
+    assert "Successfully processed" in msg_prj
     
     # 3. Module
     msg_mod = upsert_module(
         id=module_id,
+        project_id=project_id,
         name="Test Module",
-        owner_res_id=resource_id,
-        owner_res_name="Chain Owner"
+        owner_res_id=resource_id
     )
-    assert "upserted successfully" in msg_mod
+    assert "Successfully processed" in msg_mod
     
     # 4. Task
     task_id = f"TSK-TEST-{uuid.uuid4().hex[:8]}"
     msg_tsk = upsert_task(
         id=task_id,
         project_id=project_id,
-        project_name="Test Chain Project",
         module_id=module_id,
         module_name="Test Module",
         resource_id=resource_id,
         resource_name="Chain Owner",
         module_iteration_goal="Complete TDD setup"
     )
-    assert "upserted successfully" in msg_tsk
+    # The return strings in new tools changed slightly, mostly "Successfully processed..."
+    assert "Successfully processed" in msg_tsk
     
     # 5. Verify task relationship
     results = json.loads(query_sql(f"SELECT * FROM tasks WHERE id = '{task_id}'"))

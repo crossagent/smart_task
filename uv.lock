@@ -2888,7 +2888,7 @@ dev = [
 requires-dist = [
     { name = "fastapi" },
     { name = "fastmcp" },
-    { name = "google-adk", extras = ["a2a", "eval"], specifier = ">=1.12.0" },
+    { name = "google-adk", extras = ["a2a", "eval", "mcp"], specifier = ">=1.12.0" },
     { name = "google-cloud-aiplatform", specifier = ">=1.71.1" },
     { name = "google-genai" },
     { name = "notion-client" },

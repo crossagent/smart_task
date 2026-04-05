@@ -27,6 +27,10 @@ $$ language 'plpgsql';
 CREATE TABLE IF NOT EXISTS resources (
     id VARCHAR(50) PRIMARY KEY, -- RES-YYYYMMDD-XXXX
     name VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(50) DEFAULT 'human', -- human | architect | coder
+    agent_dir VARCHAR(255) DEFAULT NULL,
+    workspace_path VARCHAR(255) DEFAULT NULL,
+    is_available BOOLEAN DEFAULT true,
     dingtalk_id VARCHAR(100) DEFAULT NULL,
     professional_skill VARCHAR(255) DEFAULT NULL, -- 程序 | 策划 | 运营 | 美术
     org_role VARCHAR(255) NOT NULL, -- 引擎组组长, 制作人, etc.
@@ -35,7 +39,7 @@ CREATE TABLE IF NOT EXISTS resources (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-COMMENT ON TABLE resources IS 'Bandwidth / Personnel / 执行人';
+COMMENT ON TABLE resources IS 'Bandwidth / Personnel / 执行人 / Agent Slot';
 COMMENT ON COLUMN resources.id IS 'RES-YYYYMMDD-XXXX';
 COMMENT ON COLUMN resources.status IS 'Available | Busy | Away | Archived';
 
@@ -104,7 +108,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     resource_id VARCHAR(50) NOT NULL REFERENCES resources(id),
     module_iteration_goal TEXT NOT NULL,
     estimated_days DECIMAL(5,1) DEFAULT NULL,
-    status VARCHAR(50) DEFAULT 'Todo',
+    status VARCHAR(50) DEFAULT 'pending',
     depends_on VARCHAR(50)[] DEFAULT '{}',
     start_date DATE DEFAULT NULL,
     due_date DATE DEFAULT NULL,
@@ -117,7 +121,7 @@ COMMENT ON TABLE tasks IS 'Atomic Participant / 最小执行粒子';
 COMMENT ON COLUMN tasks.id IS 'TSK-YYYYMMDD-XXXX';
 COMMENT ON COLUMN tasks.module_iteration_goal IS 'Atomic work target (The "Soul" of the task)';
 COMMENT ON COLUMN tasks.estimated_days IS 'Effort estimation (Execution level input - Man-Days)';
-COMMENT ON COLUMN tasks.status IS 'Todo | Doing | Done | Blocked | Archived';
+COMMENT ON COLUMN tasks.status IS 'pending | ready | in_progress | code_done | done | blocked';
 COMMENT ON COLUMN tasks.depends_on IS 'Array of preceding Task IDs (Native DAG Topological structure)';
 COMMENT ON COLUMN tasks.start_date IS 'Planned start date (Scheduling level input)';
 COMMENT ON COLUMN tasks.due_date IS 'Target deadline (Scheduling level input)';

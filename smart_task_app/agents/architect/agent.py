@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from google.adk.agents.llm_agent import LlmAgent
+
+def get_db_connection():
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+        dbname=os.getenv("DB_NAME", "smart_task_hub"),
+        user=os.getenv("DB_USER", "smart_user"),
+        password=os.getenv("DB_PASSWORD", "smart_pass")
+    )
+
+def write_module_design_doc(module_name: str, content: str) -> str:
+    """Writes the architectural design document for a module to the docs directory and commits it using git."""
+    try:
+        import subprocess
+        # Get the root path of the project (assuming smart_task_app is at root level /smart_task)
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        docs_dir = os.path.join(project_root, "docs", module_name)
+        os.makedirs(docs_dir, exist_ok=True)
+        file_path = os.path.join(docs_dir, f"{module_name}_design.md")
+        
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+            
+        # Perform git add and commit
+        subprocess.run(["git", "add", file_path], cwd=project_root, check=True)
+        subprocess.run(["git", "commit", "-m", f"docs: Architect updated design for module {module_name}"], cwd=project_root, check=True)
+            
+        return f"Successfully wrote and committed design document to {file_path}"
+    except Exception as e:
+        return f"Error writing or committing document: {e}"
+
+def record_task_in_sth(
+    task_id: str, 
+    module_id: str, 
+    resource_id: str, 
+    module_iteration_goal: str,
+    depends_on: list[str] = None
+) -> str:
+    """Records a new broken-down task into the STH database."""
+    if depends_on is None:
+        depends_on = []
+    
+    # Needs to be a string format for postgres '{id1,id2}'
+    depends_on_str = "{" + ",".join(depends_on) + "}"
+    
+    sql = """
+    INSERT INTO tasks (id, module_id, resource_id, module_iteration_goal, depends_on, status)
+    VALUES (%s, %s, %s, %s, %s, 'pending')
+    ON CONFLICT (id) DO UPDATE SET
+        module_id = EXCLUDED.module_id,
+        resource_id = EXCLUDED.resource_id,
+        module_iteration_goal = EXCLUDED.module_iteration_goal,
+        depends_on = EXCLUDED.depends_on
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, (task_id, module_id, resource_id, module_iteration_goal, depends_on_str))
+                conn.commit()
+        return f"Task {task_id} recorded in STH successfully."
+    except Exception as e:
+        return f"DB error while recording task: {e}"
+
+def mark_architect_task_done(task_id: str) -> str:
+    """Marks the architect's own assignment task as code_done after completing the breakdown."""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE tasks SET status = 'code_done' WHERE id = %s", (task_id,))
+                conn.commit()
+        return f"Architect Activity Task {task_id} marked as code_done."
+    except Exception as e:
+        return f"Error: {e}"
+
+root_agent = LlmAgent(
+    name="architect_agent",
+    model="gemini-2.5-flash",
+    instruction="""You are the Architect Agent in the Smart Task Hub.
+Your job is to read the SMART_TASK_ID from the environment variables.
+Decompose the work into smaller modules/tasks, write the design docs, and record the split tasks
+into the STH database using your tools.
+When creating tasks, define clear module_iteration_goals and correct depends_on arrays (DAG).
+Ensure you document your designs using write_module_design_doc which automatically commits to Git.
+After completing all your design breakdown and saving tasks, update your own task status to 'code_done' using mark_architect_task_done.
+""",
+    tools=[write_module_design_doc, record_task_in_sth, mark_architect_task_done]
+)

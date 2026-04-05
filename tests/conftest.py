@@ -13,8 +13,8 @@ if os.getenv("DB_NAME") != "smart_task_test":
     os.environ["DB_NAME"] = "smart_task_test"
 print(f">>> [conftest] Using DB_NAME: {os.environ.get('DB_NAME')}")
 
-# Import from main ONLY after env vars are set
-from main import get_db_connection
+# Import from src ONLY after env vars are set
+from src.task_management.db import get_db_connection
 
 @pytest.fixture(scope="session")
 def db_conn():
