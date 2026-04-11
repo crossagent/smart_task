@@ -79,7 +79,7 @@ def upsert_resource(
     id: str,
     name: str,
     org_role: str,
-    resource_type: str = "human",
+    resource_type: str = "agent",
     agent_dir: Optional[str] = None,
     workspace_path: Optional[str] = None,
     is_available: bool = True,
@@ -88,7 +88,10 @@ def upsert_resource(
     weekly_capacity: int = 40,
     email: Optional[str] = None
 ) -> str:
-    """Create or update a record in the resources table."""
+    """
+    Create or update a record in the resources table.
+    Resources now primarily represent physical assets/compute slots (Agents/Machines).
+    """
     sql = """
         INSERT INTO resources (id, name, org_role, dingtalk_id, company_name, 
                              weekly_capacity, email, resource_type, agent_dir, 
