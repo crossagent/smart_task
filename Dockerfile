@@ -32,4 +32,4 @@ ENV MCP_TRANSPORT=http
 ENV PORT=45666
 
 # Use the virtual environment created by uv
-CMD ["/app/.venv/bin/python", "main.py"]
+CMD ["/app/.venv/bin/python", "-m", "src.mcp_server.server"]

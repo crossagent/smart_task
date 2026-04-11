@@ -19,19 +19,27 @@ services:
       context: .
       dockerfile: ./Dockerfile
     ports:
-      - 45666:45666
+      - "45666:45666"
+      - "9001:9001"
+      - "9002:9002"
     container_name: smart_task_copilot
     depends_on:
       - db
     environment:
       - MCP_TRANSPORT=http
       - PORT=45666
-      - MCP_HOST=0.0.0.0
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=smart_task_hub
       - DB_USER=smart_user
       - DB_PASSWORD=smart_pass
+      - SMART_WORKSPACE_ROOT=/workspaces
+    volumes:
+      - .:/app
+      - /app/.venv
+      # Mount your host workspaces directory here to allow the container to access them
+      # Ensure database records (workspace_path) use /workspaces/... paths
+      - d:/MyProject:/workspaces 
     restart: on-failure
 
 volumes:

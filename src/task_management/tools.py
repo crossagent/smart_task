@@ -240,6 +240,34 @@ def upsert_task(
     except Exception as e:
         return f"Error saving task: {str(e)}"
 
+def get_task_logs(task_id: str) -> str:
+    """
+    Retrieve the execution logs (Events) for a given Task ID.
+    Since Agents run asynchronously and persist their turns to the database, 
+    this tool allows viewing the reasoning and tool calls of the Agent in real-time.
+    """
+    query = """
+    SELECT event_type, created_at, content
+    FROM events
+    WHERE session_id = %s
+    ORDER BY created_at ASC
+    """
+    try:
+        results = execute_query(query, (task_id,))
+        if not results:
+            return f"No events found for task '{task_id}'. It might not have started yet."
+        
+        output = []
+        for row in results:
+            timestamp = row['created_at'].strftime("%Y-%m-%d %H:%M:%S")
+            etype = row['event_type']
+            content = row['content']
+            output.append(f"[{timestamp}] {etype}: {content}")
+        
+        return "\n".join(output)
+    except Exception as e:
+        return f"Database Error: {str(e)} (Ensure Agents have initialized the events table)"
+
 def delete_record(table: str, id: str) -> str:
     """Delete a record by ID from a specified table."""
     allowed_tables = {"resources", "projects", "activities", "modules", "tasks"}
@@ -266,3 +294,4 @@ def register_tools(mcp: FastMCP):
     mcp.tool()(upsert_module)
     mcp.tool()(upsert_task)
     mcp.tool()(delete_record)
+    mcp.tool()(get_task_logs)

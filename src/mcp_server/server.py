@@ -4,6 +4,7 @@ from mcp.server.fastmcp import FastMCP
 
 from src.task_management.tools import register_tools
 from src.task_execution.scheduler import scheduler_daemon
+from src.resource_management.supervisor import agent_supervisor
 
 # Initialize FastMCP Server
 mcp = FastMCP("Smart Task Hub")
@@ -18,6 +19,9 @@ if __name__ == "__main__":
     # Start the execution scheduler strictly in the background
     threading.Thread(target=scheduler_daemon, daemon=True).start()
 
+    # Bootstrap the persistent agent pool (API servers)
+    agent_supervisor.bootstrap()
+
     # Allow transport selection via environment variable or command line
     default_transport = os.getenv("MCP_TRANSPORT", "stdio")
     default_port = int(os.getenv("PORT", "45666"))
@@ -30,12 +34,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.transport == "http":
-        print(f"Starting MCP server on http://0.0.0.0:{args.port}/sse")
-        # Run SSE server manually using asyncio
+        print(f"Starting Streamable HTTP MCP server on http://0.0.0.0:{args.port}/mcp")
+        # Run HTTP streamable server
         mcp.settings.host = "0.0.0.0"
         mcp.settings.port = args.port
         # mcp.run correctly executes uvicorn binding 
-        mcp.run(transport="sse")
+        mcp.run(transport="streamable-http")
     else:
         # Use Standard IO (for local test setups in Cursor / Claude Code)
         mcp.run(transport="stdio")
