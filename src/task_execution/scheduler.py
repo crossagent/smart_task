@@ -101,9 +101,9 @@ def _dispatch_ready_tasks():
         logger.info(f"Dispatching Task {task_id} to Persistent Agent {res_id} at {agent_url}")
         
         # Trigger execution via HTTP (Async - Fire and Forget)
-        threading.Thread(target=self_trigger_agent, args=(agent_url, task_id, goal), daemon=True).start()
+        threading.Thread(target=self_trigger_agent, args=(agent_url, task_id, res_id, goal), daemon=True).start()
 
-def self_trigger_agent(url: str, task_id: str, goal: str):
+def self_trigger_agent(url: str, task_id: str, res_id: str, goal: str):
     """Sends the invocation request to the Agent's API."""
     try:
         payload = {
@@ -119,7 +119,7 @@ def self_trigger_agent(url: str, task_id: str, goal: str):
         logger.error(f"Failed to trigger agent at {url} for task {task_id}: {e}")
         # Revert status to ready if trigger failed so it can be retried
         execute_mutation("UPDATE tasks SET status = 'ready' WHERE id = %s", (task_id,))
-        execute_mutation("UPDATE resources SET is_available = True WHERE id = %s", (task_id,)) # This is slightly wrong as it needs the res_id
+        execute_mutation("UPDATE resources SET is_available = True WHERE id = %s", (res_id,))
 
 def _cleanup_task_resources(workspace_path: str, resource_id: str):
     """Releases locks and marks resource as available."""

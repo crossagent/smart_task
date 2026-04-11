@@ -1,4 +1,6 @@
 import pytest
+import respx
+import httpx
 from unittest.mock import MagicMock, patch
 from src.task_execution.scheduler import run_scheduler_tick
 from src.resource_management.workspace_lock import workspace_lock_manager, LOCK_FILE_NAME
@@ -18,84 +20,102 @@ def mock_db():
          patch("src.resource_management.workspace_lock.Path.unlink"):
         yield m_query, m_mutate
 
-def test_full_dispatch_flow(mock_db):
+@respx.mock
+def test_full_pool_dispatch_and_reconcile(mock_db):
     m_query, m_mutate = mock_db
     
-    # Reset singleton states
+    # 1. Setup states
     workspace_lock_manager._active_locks = {}
-    agent_supervisor.active_agents = {}
+    agent_supervisor.pool = {
+        "R1": MagicMock(url="http://agent-r1:9001")
+    }
 
-    # Mock data for ready tasks
-    # Task 1 needs Resource R1 (Workspace W1)
+    # First tick: Promotion + Dispatch
+    # Mock data return for Tick 1
     m_query.side_effect = [
         [], # Promote pending (none)
-        [   # Ready tasks
+        [], # Reconcile (none)
+        [   # Ready tasks for dispatch
             {
                 'task_id': 'T1', 
                 'res_id': 'R1', 
-                'agent_dir': '/agents/a1', 
-                'workspace_path': '/work/w1'
+                'workspace_path': '/work/w1',
+                'module_iteration_goal': 'Build a feature'
             }
         ]
     ]
 
-    # Mock supervisor.dispatch to return a handle
-    with patch("src.resource_management.supervisor.AgentSupervisor.dispatch") as m_dispatch:
-        mock_handle = MagicMock()
-        m_dispatch.return_value = mock_handle
+    # Mock the Agent API endpoint
+    agent_route = respx.post("http://agent-r1:9001/invocations").respond(200, json={"status": "accepted"})
+    
+    # Mock threading.Thread to run target synchronously for testing
+    with patch("src.task_execution.scheduler.threading.Thread") as mock_thread:
+        # Create a mock thread instance that calls target immediately
+        def sync_run(target, args=(), kwargs={}, daemon=True):
+            target(*args, **kwargs)
+            return MagicMock() # Return a mock handle
         
-        # Run tick
+        mock_thread.side_effect = sync_run
+        
+        # Run Tick 1 (Dispatch)
         run_scheduler_tick()
-        
-        # Verify Workspace is locked
-        assert workspace_lock_manager.is_locked('/work/w1') is True
-        
-        # Verify Mutations: resource busy, task in_progress
-        m_mutate.assert_any_call("UPDATE resources SET is_available = False WHERE id = %s", ("R1",))
-        m_mutate.assert_any_call("UPDATE tasks SET status = 'in_progress' WHERE id = %s", ("T1",))
-        
-        # Verify Dispatch called
-        m_dispatch.assert_called_once_with('T1', 'R1', '/agents/a1', '/work/w1')
-        
-        # Verify Cleanup Callback Registration
-        mock_handle.on_complete.assert_called_once()
-        
-        # Simulate completion via callback
-        # Extract the lambda and call it
-        callback = mock_handle.on_complete.call_args[0][0]
-        callback(mock_handle)
-        
-        # Verify Cleanup: Workspace unlocked, Resource released
-        assert workspace_lock_manager.is_locked('/work/w1') is False
-        m_mutate.assert_any_call("UPDATE resources SET is_available = True WHERE id = %s", ("R1",))
+    
+    # Verify Dispatch
+    assert workspace_lock_manager.is_locked('/work/w1') is True
+    m_mutate.assert_any_call("UPDATE resources SET is_available = False WHERE id = %s", ("R1",))
+    m_mutate.assert_any_call("UPDATE tasks SET status = 'in_progress' WHERE id = %s", ("T1",))
+    
+    # Verify HTTP call was made
+    assert agent_route.called
+    
+    # Second tick: Reconciliation
+    # Now simulate that T1 is finished (status='code_done' in DB)
+    m_query.side_effect = [
+        [], # Promote
+        [   # Reconciliation: find one task that is done but resource is busy
+            {
+                'id': 'T1',
+                'resource_id': 'R1',
+                'workspace_path': '/work/w1'
+            }
+        ],
+        []  # Dispatch (none)
+    ]
+    
+    # Run Tick 2 (Reconcile)
+    run_scheduler_tick()
+    
+    # Verify Cleanup
+    assert workspace_lock_manager.is_locked('/work/w1') is False
+    m_mutate.assert_any_call("UPDATE resources SET is_available = True WHERE id = %s", ("R1",))
 
 def test_conflict_deferral(mock_db):
     m_query, m_mutate = mock_db
     workspace_lock_manager._active_locks = {}
     
-    # Workspace W1 is ALREADY locked by another process/task
-    # Normalize it so it matches what the manager uses
+    # Pre-lock workspace
     norm_path = workspace_lock_manager._normalize_path('/work/w1')
     workspace_lock_manager._active_locks[norm_path] = 'OTHER_TASK'
     
+    # Mock data
     m_query.side_effect = [
-        [], # Promote pending
+        [], # Promote
+        [], # Reconcile
         [   # Ready tasks
             {
                 'task_id': 'T1', 
                 'res_id': 'R1', 
-                'agent_dir': '/agents/a1', 
-                'workspace_path': '/work/w1'
+                'workspace_path': '/work/w1',
+                'module_iteration_goal': 'Goal'
             }
         ]
     ]
     
-    with patch("src.resource_management.supervisor.AgentSupervisor.dispatch") as m_dispatch:
-        run_scheduler_tick()
-        
-        # Should NOT dispatch because workspace is locked
-        m_dispatch.assert_not_called()
-        # Should NOT update DB
-        # Note: it might have been called with other things, but not for T1
-        for call in m_mutate.call_args_list:
-            assert 'T1' not in call[0][1]
+    run_scheduler_tick()
+    
+    # Should NOT have updated T1 status to in_progress
+    for call in m_mutate.call_args_list:
+        if "TSK-001" in str(call): # using the task ID from call logic
+            assert False, "Task T1 should not have been dispatched"
+    # Or more direct check:
+    assert m_mutate.call_count == 0

@@ -112,13 +112,16 @@ class AgentSupervisor:
     def _watchdog_loop(self):
         """Continuously monitors health and restarts failed agents."""
         while not self._stop_event.is_set():
-            for handle in self.pool.values():
-                if not handle.is_alive():
-                    logger.warning(f"Agent {handle.agent_id} (port {handle.port}) died. Restarting...")
-                    self._start_agent_process(handle)
-            
+            self._reconcile_pool()
             # 每 10 秒检查一次
             time.sleep(10)
+
+    def _reconcile_pool(self):
+        """Internal logic to check health and trigger restarts."""
+        for handle in self.pool.values():
+            if not handle.is_alive():
+                logger.warning(f"Agent {handle.agent_id} (port {handle.port}) died. Restarting...")
+                self._start_agent_process(handle)
 
     def get_agent_url(self, resource_id: str) -> Optional[str]:
         """Returns the HTTP endpoint for the given resource."""

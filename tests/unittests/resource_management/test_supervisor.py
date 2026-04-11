@@ -1,65 +1,90 @@
 import pytest
-import subprocess
+import os
+import yaml
+import time
 from unittest.mock import MagicMock, patch
-from src.resource_management.supervisor import AgentSupervisor, AgentHandle
+from src.resource_management.supervisor import AgentSupervisor
 
 @pytest.fixture
-def supervisor():
-    return AgentSupervisor()
+def config_data():
+    return {
+        "db_url": "postgresql://test_db",
+        "agents_pool": [
+            {
+                "id": "test-agent",
+                "resource_id": "RES-TEST",
+                "dir": "tests/mock_agent",
+                "port": 9999,
+                "default_workspace": "/tmp/work"
+            }
+        ]
+    }
 
-def test_agent_handle_trigger_complete():
-    callback = MagicMock()
-    handle = AgentHandle("T1", "R1")
-    handle.on_complete(callback)
+@pytest.fixture
+def supervisor(tmp_path, config_data):
+    config_file = tmp_path / "config.yaml"
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
     
-    handle._trigger_complete()
-    callback.assert_called_once_with(handle)
+    # Initialize with the temporary config
+    return AgentSupervisor(config_path=str(config_file))
 
-@patch("src.resource_management.supervisor.execute_mutation")
+def test_load_config(supervisor):
+    supervisor.load_config()
+    assert supervisor.db_url == "postgresql://test_db"
+    assert "RES-TEST" in supervisor.pool
+    handle = supervisor.pool["RES-TEST"]
+    assert handle.port == 9999
+    assert handle.dir == "tests/mock_agent"
+
 @patch("src.resource_management.supervisor.subprocess.Popen")
-def test_supervisor_dispatch_and_success(mock_popen, mock_mutation, supervisor):
-    # Mock process
-    mock_proc = MagicMock()
-    mock_proc.stdout = ["line 1", "line 2"]
-    mock_proc.returncode = 0
-    mock_proc.poll.return_value = 0 # Finished
-    mock_popen.return_value = mock_proc
+def test_bootstrap_starts_processes(mock_popen, supervisor):
+    supervisor.bootstrap()
     
-    task_id = "TSK-001"
-    res_id = "RES-001"
-    agent_dir = "/path/to/agent"
-    workspace = "/path/to/work"
+    # 验证是否调用了 Popen
+    assert mock_popen.called
+    args, kwargs = mock_popen.call_args
+    cmd = args[0]
+    assert "api_server" in cmd
+    assert "9999" in cmd
     
-    handle = supervisor.dispatch(task_id, res_id, agent_dir, workspace)
-    
-    # We need to wait for the thread to finish in testing
-    # Since it's a daemon thread, we wait for a bit or join (if we had access)
-    # A better way is to wait for the handle to be removed from active_agents
-    import time
-    timeout = 5
-    start_time = time.time()
-    while task_id in supervisor.active_agents and time.time() - start_time < timeout:
-        time.sleep(0.1)
-        
-    assert task_id not in supervisor.active_agents
-    mock_popen.assert_called_once()
-    # Check if code_done mutation was called
-    mock_mutation.assert_any_call("UPDATE tasks SET status = 'code_done' WHERE id = %s AND status = 'in_progress'", (task_id,))
+    # 验证环境变量中包含了 DB URL
+    env = kwargs["env"]
+    assert env["SESSION_SERVICE_URI"] == "postgresql://test_db"
+    assert env["SMART_WORKSPACE_PATH"] == "/tmp/work"
 
-@patch("src.resource_management.supervisor.execute_mutation")
-def test_supervisor_mock_execution(mock_mutation, supervisor):
-    task_id = "TSK-MOCK"
+@patch("src.resource_management.supervisor.subprocess.Popen")
+def test_watchdog_restarts_dead_agent(mock_popen, supervisor):
+    # 1. 模拟初始启动
+    mock_proc_1 = MagicMock()
+    mock_proc_1.poll.return_value = None # 首个进程处于运行状态
+    mock_popen.return_value = mock_proc_1
     
-    # agent_dir=None triggers mock execution
-    # Monkeypatch time.sleep before dispatching to ensure the thread sees it
-    with patch("time.sleep"):
-        handle = supervisor.dispatch(task_id, "RES-1", None, "/some/path")
+    supervisor.bootstrap()
+    handle = supervisor.pool["RES-TEST"]
+    assert handle.is_alive()
+    
+    # 2. 模拟进程死亡
+    mock_proc_1.poll.return_value = 1 # 变为死亡状态
+    assert not handle.is_alive()
+    
+    # 3. 准备第二个 Mock 进程用于重启
+    mock_proc_2 = MagicMock()
+    mock_proc_2.poll.return_value = None
+    mock_popen.return_value = mock_proc_2
+
+    # 模拟 Watchdog 检查周期
+    supervisor._reconcile_pool()
         
-        # Wait for completion
-        import time
-        start_time = time.time()
-        while task_id in supervisor.active_agents and time.time() - start_time < 5:
-            time.sleep(0.01)
-            
-    # Verify mutation happened
-    mock_mutation.assert_any_call("UPDATE tasks SET status = 'code_done' WHERE id = %s", (task_id,))
+    # 验证 Popen 是否被调用了第二次（重启）
+    assert mock_popen.call_count >= 2
+    # 验证 handle 已绑定新进程
+    assert handle.process == mock_proc_2
+    
+def test_get_agent_url(supervisor):
+    supervisor.load_config()
+    url = supervisor.get_agent_url("RES-TEST")
+    assert url == "http://localhost:9999"
+    
+    # 非法 ID 返回 None
+    assert supervisor.get_agent_url("INVALID") is None
