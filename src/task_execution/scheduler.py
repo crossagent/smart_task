@@ -106,13 +106,24 @@ def _dispatch_ready_tasks():
 def self_trigger_agent(url: str, task_id: str, res_id: str, goal: str):
     """Sends the invocation request to the Agent's API."""
     try:
+        # 1. Ensure Session exists on the Agent server
+        session_init_url = f"{url}/apps/{res_id}/users/smart-task-scheduler/sessions"
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                client.post(session_init_url, json={"session_id": task_id})
+        except Exception as e:
+            logger.warning(f"Session initialization warning (non-fatal): {e}")
+
+        # 2. Standard payload for ADK api_server /run endpoint
         payload = {
-            "prompt": f"Current Task ID: {task_id}. Your goal: {goal}",
-            "session_id": task_id # Use task_id as session_id for event correlation
+            "app_name": res_id,
+            "user_id": "smart-task-scheduler",
+            "session_id": task_id,
+            "new_message": {"parts": [{"text": f"Current Task ID: {task_id}. Your goal: {goal}"}]}
         }
-        # Timeout is short because we only want to ensure the agent received the instruction
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(f"{url}/invocations", json=payload)
+        
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(f"{url}/run", json=payload)
             response.raise_for_status()
             logger.info(f"Task {task_id} successfully triggered on {url}")
     except Exception as e:

@@ -4,12 +4,13 @@ import os
 import subprocess
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from google.adk.agents.llm_agent import LlmAgent
+from google.adk.agents import LlmAgent
+from smart_task_app.shared_libraries.constants import MODEL
 
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
+        port=os.getenv("DB_PORT", "5433"),
         dbname=os.getenv("DB_NAME", "smart_task_hub"),
         user=os.getenv("DB_USER", "smart_user"),
         password=os.getenv("DB_PASSWORD", "smart_pass")
@@ -52,9 +53,13 @@ def update_task_completed(task_id: str) -> str:
     except Exception as e:
         return str(e)
 
+from google.adk.apps import App
+from google.adk.plugins.logging_plugin import LoggingPlugin
+
 root_agent = LlmAgent(
-    name="coder_agent",
-    model="gemini-2.5-flash",
+    name="coder",
+    model=MODEL,
+    description="Coder Agent (执行专家): 负责对 Architect 拆解的任务进行原子化代码实现与 DB 状态同步",
     instruction="""You are the Coder Agent in the Smart Task Hub.
 You will be provided a task ID via the SMART_TASK_ID environment variable.
 Use the query_context tool to understand what you need to implement.
@@ -65,3 +70,10 @@ Finally, mark the task as completed using update_task_completed.
 """,
     tools=[query_context, execute_shell, update_task_completed]
 )
+
+app = App(
+    name="coder_app",
+    root_agent=root_agent,
+    plugins=[LoggingPlugin()]  # 标准加打印方式
+)
+

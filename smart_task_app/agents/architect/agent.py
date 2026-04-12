@@ -1,14 +1,14 @@
 from __future__ import annotations
-
+0
 import os
 import psycopg2
-from psycopg2.extras import RealDictCursor
-from google.adk.agents.llm_agent import LlmAgent
+from google.adk.agents import LlmAgent
+from smart_task_app.shared_libraries.constants import MODEL
 
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
+        port=os.getenv("DB_PORT", "5433"),
         dbname=os.getenv("DB_NAME", "smart_task_hub"),
         user=os.getenv("DB_USER", "smart_user"),
         password=os.getenv("DB_PASSWORD", "smart_pass")
@@ -78,9 +78,13 @@ def mark_architect_task_done(task_id: str) -> str:
     except Exception as e:
         return f"Error: {e}"
 
+from google.adk.apps import App
+from google.adk.plugins.logging_plugin import LoggingPlugin
+
 root_agent = LlmAgent(
-    name="architect_agent",
-    model="gemini-2.5-flash",
+    name="architect",
+    model=MODEL,
+    description="Architect Agent (分解专家): 负责对 Project 进行原子化任务拆解与架构定义",
     instruction="""You are the Architect Agent in the Smart Task Hub.
 Your job is to read the SMART_TASK_ID from the environment variables.
 Decompose the work into smaller modules/tasks, write the design docs, and record the split tasks
@@ -91,3 +95,10 @@ After completing all your design breakdown and saving tasks, update your own tas
 """,
     tools=[write_module_design_doc, record_task_in_sth, mark_architect_task_done]
 )
+
+app = App(
+    name="architect_app",
+    root_agent=root_agent,
+    plugins=[LoggingPlugin()]  # 标准加打印方式
+)
+

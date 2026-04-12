@@ -7,6 +7,7 @@ import logging
 import yaml
 import time
 import httpx
+from dotenv import load_dotenv
 from typing import Optional, Dict, List, Any, Callable
 from src.task_management.db import execute_mutation
 
@@ -36,6 +37,7 @@ class AgentSupervisor:
         self.config_path = config_path
         self.pool: Dict[str, PersistentAgentHandle] = {} # resource_id -> Handle
         self.db_url: str = ""
+        self.db_config: Dict[str, Any] = {}
         self._watchdog_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
 
@@ -48,7 +50,10 @@ class AgentSupervisor:
         with open(self.config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
             self.db_url = config.get("db_url", "")
+            self.db_config = config.get("db_config", {})
             
+            # Load .env for API keys
+            load_dotenv()
             for agent_cfg in config.get("agents_pool", []):
                 handle = PersistentAgentHandle(
                     agent_id=agent_cfg["id"],
@@ -79,6 +84,15 @@ class AgentSupervisor:
         env = os.environ.copy()
         if self.db_url:
             env["SESSION_SERVICE_URI"] = self.db_url
+        
+        # Inject individual DB parameters for agent tools
+        if self.db_config:
+            env["DB_HOST"] = str(self.db_config.get("host", "localhost"))
+            env["DB_PORT"] = str(self.db_config.get("port", "5432"))
+            env["DB_USER"] = str(self.db_config.get("user", "smart_user"))
+            env["DB_PASSWORD"] = str(self.db_config.get("password", "smart_pass"))
+            env["DB_NAME"] = str(self.db_config.get("dbname", "smart_task_hub"))
+
         if handle.workspace:
             env["SMART_WORKSPACE_PATH"] = handle.workspace
 
