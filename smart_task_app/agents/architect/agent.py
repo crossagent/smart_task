@@ -1,5 +1,5 @@
 from __future__ import annotations
-0
+
 import os
 import psycopg2
 from google.adk.agents import LlmAgent
@@ -40,7 +40,7 @@ def record_task_in_sth(
     module_id: str, 
     resource_id: str, 
     module_iteration_goal: str,
-    depends_on: list[str] = None
+    depends_on: list[str] | None = None
 ) -> str:
     """Records a new broken-down task into the STH database."""
     if depends_on is None:
@@ -86,12 +86,13 @@ root_agent = LlmAgent(
     model=MODEL,
     description="Architect Agent (分解专家): 负责对 Project 进行原子化任务拆解与架构定义",
     instruction="""You are the Architect Agent in the Smart Task Hub.
-Your job is to read the SMART_TASK_ID from the environment variables.
-Decompose the work into smaller modules/tasks, write the design docs, and record the split tasks
-into the STH database using your tools.
-When creating tasks, define clear module_iteration_goals and correct depends_on arrays (DAG).
-Ensure you document your designs using write_module_design_doc which automatically commits to Git.
-After completing all your design breakdown and saving tasks, update your own task status to 'code_done' using mark_architect_task_done.
+If a task ID is provided via the SMART_TASK_ID environment variable, decompose that specific work into smaller modules/tasks.
+If NO task ID is provided, you should act on the direct instructions provided in the message.
+Your responsibilities include:
+1. Writing design docs using write_module_design_doc (which automatically commits to Git).
+2. Recording split tasks into the STH database using record_task_in_sth.
+3. Defining clear module_iteration_goals and correct depends_on arrays (DAG).
+Finally, if a task ID was provided, mark your task status to 'code_done' using mark_architect_task_done.
 """,
     tools=[write_module_design_doc, record_task_in_sth, mark_architect_task_done]
 )
@@ -99,6 +100,6 @@ After completing all your design breakdown and saving tasks, update your own tas
 app = App(
     name="architect_app",
     root_agent=root_agent,
-    plugins=[LoggingPlugin()]  # 标准加打印方式
+    plugins=[]  # Temporarily disabled LoggingPlugin to bypass Windows GBK encoding issues
 )
 

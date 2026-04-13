@@ -1,0 +1,17 @@
+{
+  "name": "smoke_test",
+  "description": "Smoke Test Agent for A2A Verification",
+  "url": "http://localhost:9013/a2a/smoke_test",
+  "version": "1.0.0",
+  "capabilities": {},
+  "skills": [
+    {
+      "id": "smoke_test-model",
+      "name": "model",
+      "description": "Smoke test model skill",
+      "tags": ["llm"]
+    }
+  ],
+  "default_input_modes": ["text/plain"],
+  "default_output_modes": ["text/plain"]
+}

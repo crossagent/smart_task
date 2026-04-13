@@ -8,18 +8,20 @@ from google.adk.plugins import LoggingPlugin
 from .shared_libraries.constants import MODEL
 
 # 1. 定义远程 Architect Agent (分解专家)
-# 它运行在端口 9011
+# 默认端口 9011，支持环境变量覆盖
+ARCHITECT_URL = os.getenv("ARCHITECT_AGENT_URL", "http://localhost:9011/a2a/architect/.well-known/agent-card.json")
 architect_agent = RemoteA2aAgent(
     name="architect",
-    agent_card="http://localhost:9011/.well-known/agent.json",
+    agent_card=ARCHITECT_URL,
     description="负责逻辑熵减与载荷驱动的任务分解"
 )
 
 # 2. 定义远程 Coder Agent (原子化专家)
-# 它运行在端口 9012
+# 默认端口 9012，支持环境变量覆盖
+CODER_URL = os.getenv("CODER_AGENT_URL", "http://localhost:9012/a2a/coder/.well-known/agent-card.json")
 coder_agent = RemoteA2aAgent(
     name="coder",
-    agent_card="http://localhost:9012/.well-known/agent.json",
+    agent_card=CODER_URL,
     description="负责交付锚点与物理架构的原子化实现"
 )
 
@@ -27,7 +29,7 @@ coder_agent = RemoteA2aAgent(
 # 这是 ADK 最推荐的多 Agent 协作方式：架构师分解 -> 代码实现
 root_agent = SequentialAgent(
     name="SmartTaskPipeline",
-    agents=[architect_agent, coder_agent],
+    sub_agents=[architect_agent, coder_agent],
     description="智能任务分解与执行流水线 (A2A 标准版)"
 )
 

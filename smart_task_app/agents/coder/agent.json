@@ -1,0 +1,17 @@
+{
+  "name": "coder",
+  "description": "Coder Agent for Atomic Implementation",
+  "url": "http://localhost:9012/a2a/coder",
+  "version": "1.0.0",
+  "capabilities": {},
+  "skills": [
+    {
+      "id": "coder-model",
+      "name": "model",
+      "description": "Coding and execution skills",
+      "tags": ["llm", "coder"]
+    }
+  ],
+  "default_input_modes": ["text/plain"],
+  "default_output_modes": ["text/plain"]
+}

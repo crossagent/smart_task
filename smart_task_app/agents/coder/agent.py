@@ -61,12 +61,12 @@ root_agent = LlmAgent(
     model=MODEL,
     description="Coder Agent (执行专家): 负责对 Architect 拆解的任务进行原子化代码实现与 DB 状态同步",
     instruction="""You are the Coder Agent in the Smart Task Hub.
-You will be provided a task ID via the SMART_TASK_ID environment variable.
-Use the query_context tool to understand what you need to implement.
-Perform the implementation natively. You have access to execute_shell which will execute bash/shell commands.
+If a task ID is provided via the SMART_TASK_ID environment variable, use the query_context tool to understand what you need to implement.
+If NO task ID is provided, you should act on the direct instructions provided in the message from the user or the Architect.
+Perform the implementation natively. You have access to execute_shell which will execute bash/shell commands (like 'ls', 'echo', 'touch').
 Verify your changes using `execute_shell('pytest')` if applicable.
-Ensure you commit your work using git: `execute_shell('git add . && git commit -m "..."')`.
-Finally, mark the task as completed using update_task_completed.
+Ensure you commit your work using git: `execute_shell('git add . && git commit -m "..."')` if it's a code change.
+Finally, if a task ID was provided, mark the task as completed using update_task_completed.
 """,
     tools=[query_context, execute_shell, update_task_completed]
 )
@@ -74,6 +74,6 @@ Finally, mark the task as completed using update_task_completed.
 app = App(
     name="coder_app",
     root_agent=root_agent,
-    plugins=[LoggingPlugin()]  # 标准加打印方式
+    plugins=[]  # Temporarily disabled LoggingPlugin to bypass Windows GBK encoding issues
 )
 
