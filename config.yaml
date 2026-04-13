@@ -1,6 +1,6 @@
 # Smart Task Hub - Persistent Agent Pool Configuration
 
-db_url: "postgresql://smart_user:smart_pass@db:5432/smart_task_hub"
+db_url: "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub"
 
 # Environment mapping for dynamic interpolation (optional)
 env:
@@ -12,12 +12,14 @@ agents_pool:
     resource_id: "RES-ARCHITECT-001"
     name: "Architect Agent"
     dir: "smart_task_app/agents/architect"
-    port: 9001
+    host: "architect_agent"
+    port: 9011
     default_workspace: "/workspaces/smart_task" # Usually works on the main repo
 
   - id: "coder"
     resource_id: "RES-CODER-001"
     name: "Coder Agent"
     dir: "smart_task_app/agents/coder"
-    port: 9002
+    host: "coder_agent"
+    port: 9012
     default_workspace: "/workspaces/smart_task"

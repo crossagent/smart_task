@@ -17,17 +17,28 @@ class PersistentAgentHandle:
     """
     Represents a long-running Agent API server.
     """
-    def __init__(self, agent_id: str, resource_id: str, dir: str, port: int, workspace: str):
+    def __init__(self, agent_id: str, resource_id: str, dir: str, port: int, workspace: str, host: str = "localhost"):
         self.agent_id = agent_id
         self.resource_id = resource_id
         self.dir = dir
         self.port = port
         self.workspace = workspace
+        self.host = host
         self.process: Optional[subprocess.Popen] = None
-        self.url = f"http://localhost:{port}"
+        self.url = f"http://{host}:{port}"
 
     def is_alive(self) -> bool:
-        return self.process is not None and self.process.poll() is None
+        """Checks if the agent is responsive."""
+        if self.host == "localhost":
+            return self.process is not None and self.process.poll() is None
+        
+        # Remote health check
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                response = client.get(f"{self.url}/list-apps")
+                return response.status_code == 200
+        except Exception:
+            return False
 
 class AgentSupervisor:
     """
@@ -60,7 +71,8 @@ class AgentSupervisor:
                     resource_id=agent_cfg["resource_id"],
                     dir=agent_cfg["dir"],
                     port=agent_cfg["port"],
-                    workspace=agent_cfg.get("default_workspace", "")
+                    workspace=agent_cfg.get("default_workspace", ""),
+                    host=agent_cfg.get("host", "localhost")
                 )
                 self.pool[handle.resource_id] = handle
 
@@ -77,8 +89,12 @@ class AgentSupervisor:
         self._watchdog_thread.start()
 
     def _start_agent_process(self, handle: PersistentAgentHandle):
-        """Launches a single adk api_server process."""
-        logger.info(f"Starting API server for {handle.agent_id} on port {handle.port}")
+        """Starts the physical agent process if it's local."""
+        if handle.host != "localhost":
+            logger.info(f"Agent {handle.agent_id} is remote ({handle.url}). Skipping subprocess startup.")
+            return
+
+        logger.info(f"Starting Local Agent {handle.agent_id} on port {handle.port}...")
         
         # 准备环境变量
         env = os.environ.copy()

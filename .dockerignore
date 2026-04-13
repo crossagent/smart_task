@@ -1,0 +1,14 @@
+.venv
+__pycache__
+.git
+.pytest_cache
+*.pyc
+*.pyo
+venv
+obj
+bin
+.ipynb_checkpoints
+.claude
+test_output.txt
+fastmcp.txt
+.env

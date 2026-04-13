@@ -40,7 +40,7 @@ def record_task_in_sth(
     module_id: str, 
     resource_id: str, 
     module_iteration_goal: str,
-    depends_on: list[str] | None = None
+    depends_on: list = []
 ) -> str:
     """Records a new broken-down task into the STH database."""
     if depends_on is None:
@@ -98,8 +98,7 @@ Finally, if a task ID was provided, mark your task status to 'code_done' using m
 )
 
 app = App(
-    name="architect_app",
+    name="architect",
     root_agent=root_agent,
     plugins=[]  # Temporarily disabled LoggingPlugin to bypass Windows GBK encoding issues
 )
-

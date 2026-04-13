@@ -84,10 +84,13 @@ def _dispatch_ready_tasks():
         goal = task['module_iteration_goal']
         
         # Check if the agent is actually up in the pool
-        agent_url = agent_supervisor.get_agent_url(res_id)
-        if not agent_url:
+        handle = agent_supervisor.pool.get(res_id)
+        if not handle:
             logger.warning(f"Task {task_id} deferred: Resource {res_id} not found in persistent pool.")
             continue
+        
+        agent_url = handle.url
+        agent_id = handle.agent_id
 
         # Attempt to lock the physical Workspace
         if not workspace_lock_manager.try_lock(workspace_path, task_id):
@@ -101,13 +104,13 @@ def _dispatch_ready_tasks():
         logger.info(f"Dispatching Task {task_id} to Persistent Agent {res_id} at {agent_url}")
         
         # Trigger execution via HTTP (Async - Fire and Forget)
-        threading.Thread(target=self_trigger_agent, args=(agent_url, task_id, res_id, goal), daemon=True).start()
+        threading.Thread(target=self_trigger_agent, args=(agent_url, agent_id, res_id, task_id, goal), daemon=True).start()
 
-def self_trigger_agent(url: str, task_id: str, res_id: str, goal: str):
+def self_trigger_agent(url: str, agent_id: str, res_id: str, task_id: str, goal: str):
     """Sends the invocation request to the Agent's API."""
     try:
         # 1. Ensure Session exists on the Agent server
-        session_init_url = f"{url}/apps/{res_id}/users/smart-task-scheduler/sessions"
+        session_init_url = f"{url}/apps/{agent_id}/users/smart-task-scheduler/sessions"
         try:
             with httpx.Client(timeout=10.0) as client:
                 client.post(session_init_url, json={"session_id": task_id})
@@ -116,7 +119,7 @@ def self_trigger_agent(url: str, task_id: str, res_id: str, goal: str):
 
         # 2. Standard payload for ADK api_server /run endpoint
         payload = {
-            "app_name": res_id,
+            "app_name": agent_id,
             "user_id": "smart-task-scheduler",
             "session_id": task_id,
             "new_message": {"parts": [{"text": f"Current Task ID: {task_id}. Your goal: {goal}"}]}

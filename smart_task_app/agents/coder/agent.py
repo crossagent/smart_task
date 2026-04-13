@@ -72,8 +72,7 @@ Finally, if a task ID was provided, mark the task as completed using update_task
 )
 
 app = App(
-    name="coder_app",
+    name="coder",
     root_agent=root_agent,
     plugins=[]  # Temporarily disabled LoggingPlugin to bypass Windows GBK encoding issues
 )
-

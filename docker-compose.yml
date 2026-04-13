@@ -34,13 +34,62 @@ services:
       - DB_USER=smart_user
       - DB_PASSWORD=smart_pass
       - SMART_WORKSPACE_ROOT=/workspaces
+      - ARCHITECT_AGENT_URL=http://architect_agent:9011/a2a/architect/.well-known/agent-card.json
+      - CODER_AGENT_URL=http://coder_agent:9012/a2a/coder/.well-known/agent-card.json
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - PYTHONPATH=.
+      - AGENT_BASE_PATH=/app
     volumes:
       - .:/app
       - /app/.venv
-      # Mount your host workspaces directory here to allow the container to access them
-      # Ensure database records (workspace_path) use /workspaces/... paths
       - d:/MyProject:/workspaces 
     restart: on-failure
+
+  architect_agent:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=smart_task_hub
+      - DB_USER=smart_user
+      - DB_PASSWORD=smart_pass
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - SESSION_SERVICE_URI=postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub
+      - PYTHONPATH=.
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9011", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub", "--log_level", "DEBUG", "-v"]
+    volumes:
+      - .:/app
+      - /app/.venv
+    depends_on:
+      - db
+    ports:
+      - "9011:9011"
+
+  coder_agent:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=smart_task_hub
+      - DB_USER=smart_user
+      - DB_PASSWORD=smart_pass
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - SMART_WORKSPACE_ROOT=/workspaces
+      - SESSION_SERVICE_URI=postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub
+      - PYTHONPATH=.
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9012", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub"]
+    ports:
+      - "9012:9012"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - d:/MyProject:/workspaces
+    depends_on:
+      - db
 
 volumes:
   postgres_data:

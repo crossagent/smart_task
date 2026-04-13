@@ -247,22 +247,39 @@ def get_task_logs(task_id: str) -> str:
     this tool allows viewing the reasoning and tool calls of the Agent in real-time.
     """
     query = """
-    SELECT event_type, created_at, content
+    SELECT author, timestamp, content
     FROM events
     WHERE session_id = %s
-    ORDER BY created_at ASC
+    ORDER BY timestamp ASC
     """
     try:
         results = execute_query(query, (task_id,))
         if not results:
-            return f"No events found for task '{task_id}'. It might not have started yet."
+            return f"No events found for task '{task_id}'. It might not have started yet (Check if agents are pointed to the shared DB)."
         
         output = []
         for row in results:
-            timestamp = row['created_at'].strftime("%Y-%m-%d %H:%M:%S")
-            etype = row['event_type']
+            timestamp = row['timestamp']
+            if isinstance(timestamp, (int, float)): # Handle cases where it might be a float timestamp
+                from datetime import datetime
+                timestamp = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+            elif hasattr(timestamp, 'strftime'):
+                timestamp = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            
+            author = row['author']
             content = row['content']
-            output.append(f"[{timestamp}] {etype}: {content}")
+            
+            # ADK content is usually a dict. We want to extract the message text.
+            if isinstance(content, dict):
+                # Try to extract message parts
+                parts = content.get('parts', [])
+                extracted_text = " ".join([p.get('text', '') for p in parts if isinstance(p, dict)])
+                if not extracted_text:
+                    extracted_text = str(content)
+            else:
+                extracted_text = str(content)
+
+            output.append(f"[{timestamp}] {author}: {extracted_text}")
         
         return "\n".join(output)
     except Exception as e:
