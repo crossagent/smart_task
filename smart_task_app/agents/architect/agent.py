@@ -35,12 +35,14 @@ def write_module_design_doc(module_name: str, content: str) -> str:
     except Exception as e:
         return f"Error writing or committing document: {e}"
 
+from typing import List
+
 def record_task_in_sth(
     task_id: str, 
     module_id: str, 
     resource_id: str, 
     module_iteration_goal: str,
-    depends_on: list = []
+    depends_on: List[str] = []
 ) -> str:
     """Records a new broken-down task into the STH database."""
     if depends_on is None:

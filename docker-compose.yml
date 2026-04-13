@@ -58,7 +58,7 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - SESSION_SERVICE_URI=postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9011", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub", "--log_level", "DEBUG", "-v"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9011", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk", "--log_level", "DEBUG", "-v"]
     volumes:
       - .:/app
       - /app/.venv
@@ -81,7 +81,7 @@ services:
       - SMART_WORKSPACE_ROOT=/workspaces
       - SESSION_SERVICE_URI=postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9012", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9012", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
     ports:
       - "9012:9012"
     volumes:

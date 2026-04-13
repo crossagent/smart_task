@@ -44,6 +44,9 @@ COMMENT ON COLUMN resources.id IS 'RES-YYYYMMDD-XXXX';
 COMMENT ON COLUMN resources.status IS 'Available | Busy | Away | Archived';
 
 -- 4. Project Table - '战略项目池' (Inbox / Project Root)
+CREATE SCHEMA IF NOT EXISTS adk;
+GRANT ALL ON SCHEMA adk TO smart_user;
+
 CREATE TABLE IF NOT EXISTS projects (
     id VARCHAR(50) PRIMARY KEY, -- PRJ-YYYYMMDD-XXXX
     name VARCHAR(255) NOT NULL,
