@@ -29,14 +29,17 @@ def run_scheduler_tick():
         logger.error(f"Error in scheduler tick: {e}")
 
 def _promote_pending_tasks():
-    pending_tasks = execute_query("SELECT id, depends_on FROM tasks WHERE status = 'pending'")
+    pending_tasks = execute_query("SELECT id, depends_on, is_approved FROM tasks WHERE status = 'pending'")
     for task in pending_tasks:
         task_id = task['id']
         depends_on = task['depends_on'] or []
+        is_approved = task['is_approved']
+        
+        target_status = 'ready' if is_approved else 'awaiting_approval'
         
         if not depends_on:
-            execute_mutation("UPDATE tasks SET status = 'ready' WHERE id = %s", (task_id,))
-            logger.info(f"Promoted {task_id} to ready (No dependencies).")
+            execute_mutation("UPDATE tasks SET status = %s WHERE id = %s", (target_status, task_id))
+            logger.info(f"Promoted {task_id} to {target_status} (No dependencies).")
             continue
         
         # Check status of dependencies
@@ -44,10 +47,10 @@ def _promote_pending_tasks():
         chk_query = f"SELECT id, status FROM tasks WHERE id IN ({placeholders})"
         deps = execute_query(chk_query, tuple(depends_on))
         
-        # Only ready if all deps are 'done' (or similar final state)
+        # Only promote if all deps are 'done' (or similar final state)
         if len(deps) == len(depends_on) and all(d['status'] in ('done', 'code_done') for d in deps):
-            execute_mutation("UPDATE tasks SET status = 'ready' WHERE id = %s", (task_id,))
-            logger.info(f"Promoted {task_id} to ready (Dependencies met).")
+            execute_mutation("UPDATE tasks SET status = %s WHERE id = %s", (target_status, task_id))
+            logger.info(f"Promoted {task_id} to {target_status} (Dependencies met).")
 
 def _reconcile_completed_tasks():
     """Checks for tasks that finished execution and releases their resource/locks."""

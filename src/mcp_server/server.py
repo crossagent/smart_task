@@ -16,7 +16,6 @@ mcp = FastMCP("Smart Task Hub")
 # Fix: Disable DNS rebinding protection for Docker internal networking
 mcp.settings.transport_security.enable_dns_rebinding_protection = False
 
-
 # Register all Database CRUD and context tools
 register_tools(mcp)
 

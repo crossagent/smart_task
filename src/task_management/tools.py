@@ -242,6 +242,65 @@ def upsert_task(
     except Exception as e:
         return f"Error saving task: {str(e)}"
 
+def list_tasks_for_review() -> str:
+    """
+    List all tasks that require human approval.
+    Includes 'pending' tasks (for roadmap review) and 'awaiting_approval' tasks (stalled for review).
+    """
+    query = """
+        SELECT 
+            t.id, t.project_id, t.module_iteration_goal as goal, 
+            t.estimated_hours, t.status, t.is_approved
+        FROM tasks t
+        WHERE t.is_approved = FALSE AND t.status IN ('pending', 'awaiting_approval')
+        ORDER BY t.created_at ASC
+    """
+    try:
+        results = execute_query(query)
+        if not results:
+            return "No tasks currently awaiting review."
+        return json.dumps(results, indent=2, ensure_ascii=False, cls=CustomEncoder)
+    except Exception as e:
+        return f"Error listing tasks: {str(e)}"
+
+def approve_task(task_id: str) -> str:
+    """
+    Manually approve a task for execution.
+    If the task was waiting for approval (awaiting_approval), it moves to 'ready' immediately.
+    """
+    try:
+        # Check current status
+        chk = execute_query("SELECT status FROM tasks WHERE id = %s", (task_id,))
+        if not chk:
+            return f"Error: Task '{task_id}' not found."
+            
+        current_status = chk[0]['status']
+        
+        # Set is_approved = True
+        execute_mutation("UPDATE tasks SET is_approved = TRUE WHERE id = %s", (task_id,))
+        
+        # If it was stuck at awaiting_approval, push it to ready
+        if current_status == 'awaiting_approval':
+            execute_mutation("UPDATE tasks SET status = 'ready' WHERE id = %s", (task_id,))
+            return f"Task '{task_id}' approved and promoted to READY."
+            
+        return f"Task '{task_id}' pre-approved. It will start once dependencies are met."
+    except Exception as e:
+        return f"Error approving task: {str(e)}"
+
+def reject_task(task_id: str, reason: str) -> str:
+    """
+    Reject a task and mark it as blocked with a reason.
+    """
+    sql = "UPDATE tasks SET status = 'blocked', blocker_reason = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s"
+    try:
+        count = execute_mutation(sql, (reason, task_id))
+        if count == 0:
+            return f"Error: Task '{task_id}' not found."
+        return f"Task '{task_id}' rejected and marked as BLOCKED."
+    except Exception as e:
+        return f"Error rejecting task: {str(e)}"
+
 def submit_task_deliverable(
     task_id: str,
     status: str,
@@ -415,3 +474,6 @@ def register_tools(mcp: FastMCP):
     mcp.tool()(get_task_logs)
     mcp.tool()(report_blocker)
     mcp.tool()(get_activity_schedule_report)
+    mcp.tool()(list_tasks_for_review)
+    mcp.tool()(approve_task)
+    mcp.tool()(reject_task)
