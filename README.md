@@ -63,9 +63,10 @@ graph TD
 
 | 分类 | 工具示例 | 说明 |
 | :--- | :--- | :--- |
-| **CRUD** | `create_project`, `update_task`, etc. | 完整的生命周期管理。 |
-| **查询驱动** | `execute_query` | 支持只读 SQL，允许 AI 进行跨表统计和复杂逻辑分析。 |
-| **元数据发现** | `get_db_schema` | 允许 AI 动态获取表结构，辅助其在没有预设指令的情况下构建查询。 |
+| **基础 CRUD** | `upsert_project`, `upsert_task`, etc. | 核心实体生命周期管理，支持双参校验。 |
+| **观测与审计** | `get_task_logs`, `get_activity_schedule_report` | 实时的 Agent 思路追踪与活动进度可视化 Markdown 报告。 |
+| **人机熔断** | `list_tasks_for_review`, `approve_task`, `reject_task` | 核心治理工具，实现对 Agent 计划的人工审核。 |
+| **数据库驱动** | `query_sql`, `get_database_schema` | 允许 AI 动态感知 Schema 并进行跨维度数据分析。 |
 
 ---
 
@@ -96,8 +97,24 @@ docker-compose up -d --build
 
 1.  **需求捕获（Project）**: 用户非结构化输入“我想在页面加个搜索功能”，由服务栈生成 `upsert_project` 记录。
 2.  **业务策略层 (Activity)**: 读取 Project 生成对口 `Activity`，定义业务/执行目标、限定 Owner 与边界。
-3.  **结构化降维 (Architect)**: 方案结构拆解 AI 读取 Activity 意图与对口的细粒度 Module，下推生成多个原子级 `Task`。它基于阅读各任务的自然语义 `module_iteration_goal` 锁定潜在冲突边界，生成能够规避执行阻塞的硬性拓扑依赖链 `depends_on`。
-4.  **数学排期引擎 (Scheduler Engine / Agent)**: 脱离理解复杂业务的包袱，完全降维为图论状态机。通过读取已经梳理完的无环图 `depends_on`，配合 `ResourceManager` 的物理资源与 Workspace 锁，计算出带有强烈确定性的精准时轴 (`start_date`, `due_date`) 并发起执行。
+3.  **结构化降维 (Architect)**: 方案结构拆解 AI 读取 Activity 意图与对口的细粒度 Module，下推生成多个原子级 `Task`。它基于阅读各任务的自然语义生成有向无环图结构 `depends_on`，任务初始状态为 `pending`。
+4.  **人机熔断与预审批 (Review & Sign-off) [NEW]**: 
+    *   人类通过 `list_tasks_for_review` 审阅 Agent 自动拆解的路线图与成本预估。
+    *   **预审批**: 哪怕依赖项未完成，人类也可调用 `approve_task` 预签发权限。
+    *   **拦截**: 未经过审批且依赖已满足的任务，将自动停留在 `awaiting_approval`。
+5.  **数学排期引擎 (Scheduler Engine / Agent)**: 自动挑选 `status = 'ready'` 且 `is_approved = TRUE` 的任务。配合 `ResourceManager` 的物理资源与 Workspace 锁，发起执行。
+
+---
+
+## 🛡️ 治理与观测性 (Governance & Observability)
+
+### 1. 行为审计 (Audit Trail)
+本项目集成了 **ADK Event Tracking** 机制。Agent 的每一轮思考 (`thought`) 和工具调用 (`tool_call`) 都会作为 `Event` 实时持久化至 PostgreSQL。通过 `get_task_logs` 工具，人类可以像查看控制台日志一样查看 Agent 的“心理轨迹”。
+
+### 2. 人机熔断机制 (Human-in-the-Loop)
+为了防止 Agent 陷入死循环、产生逻辑偏移或消耗非预期资源，系统在任务分发层设立了强制熔断器。
+*   **资源保护**: 只有 `is_approved` 标记为 `TRUE` 的任务才会被派发。
+*   **状态隔离**: 新引入 `awaiting_approval` 状态，将任务的“逻辑就绪”与“派发授权”解耦。
 
 ---
 
