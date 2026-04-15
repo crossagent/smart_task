@@ -110,25 +110,57 @@ CREATE TABLE IF NOT EXISTS tasks (
     module_id VARCHAR(50) NOT NULL REFERENCES modules(id),
     resource_id VARCHAR(50) NOT NULL REFERENCES resources(id),
     module_iteration_goal TEXT NOT NULL,
-    estimated_days DECIMAL(5,1) DEFAULT NULL,
+    estimated_hours DECIMAL(10,2) DEFAULT NULL,
     status VARCHAR(50) DEFAULT 'pending',
     depends_on VARCHAR(50)[] DEFAULT '{}',
     start_date DATE DEFAULT NULL,
     due_date DATE DEFAULT NULL,
     artifact_url TEXT DEFAULT NULL,
     redmine_id VARCHAR(50) DEFAULT NULL,
+    blocker_reason TEXT DEFAULT NULL,
+    retry_count INT DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 COMMENT ON TABLE tasks IS 'Atomic Participant / 最小执行粒子';
 COMMENT ON COLUMN tasks.id IS 'TSK-YYYYMMDD-XXXX';
 COMMENT ON COLUMN tasks.module_iteration_goal IS 'Atomic work target (The "Soul" of the task)';
-COMMENT ON COLUMN tasks.estimated_days IS 'Effort estimation (Execution level input - Man-Days)';
-COMMENT ON COLUMN tasks.status IS 'pending | ready | in_progress | code_done | done | blocked';
+COMMENT ON COLUMN tasks.estimated_hours IS 'Effort estimation (Execution level input - Hours)';
+COMMENT ON COLUMN tasks.status IS 'pending | ready | in_progress | code_done | done | failed | blocked | needs_human_help';
 COMMENT ON COLUMN tasks.depends_on IS 'Array of preceding Task IDs (Native DAG Topological structure)';
 COMMENT ON COLUMN tasks.start_date IS 'Planned start date (Scheduling level input)';
 COMMENT ON COLUMN tasks.due_date IS 'Target deadline (Scheduling level input)';
 COMMENT ON COLUMN tasks.artifact_url IS 'URL to the deliverable artifact (Doc/Asset/Repo)';
+COMMENT ON COLUMN tasks.blocker_reason IS 'Reason why the task failed or is blocked';
+COMMENT ON COLUMN tasks.retry_count IS 'Number of times the task was auto-retried';
+
+-- 7.5 Dynamic Progress Views (SQL Inference instead of static columns)
+CREATE OR REPLACE VIEW v_module_progress AS
+SELECT 
+    module_id,
+    COUNT(id) as total_tasks,
+    COUNT(CASE WHEN status IN ('done', 'code_done') THEN 1 END) as completed_tasks,
+    ROUND(
+        CASE WHEN COUNT(id) = 0 THEN 0 
+        ELSE (COUNT(CASE WHEN status IN ('done', 'code_done') THEN 1 END)::NUMERIC / COUNT(id) * 100) 
+        END, 2
+    ) as completion_percentage
+FROM tasks
+GROUP BY module_id;
+
+CREATE OR REPLACE VIEW v_activity_progress AS
+SELECT 
+    activity_id,
+    COUNT(id) as total_tasks,
+    COUNT(CASE WHEN status IN ('done', 'code_done') THEN 1 END) as completed_tasks,
+    ROUND(
+        CASE WHEN COUNT(id) = 0 THEN 0 
+        ELSE (COUNT(CASE WHEN status IN ('done', 'code_done') THEN 1 END)::NUMERIC / COUNT(id) * 100) 
+        END, 2
+    ) as completion_percentage
+FROM tasks
+WHERE activity_id IS NOT NULL
+GROUP BY activity_id;
 
 -- 8. Activity Collaborators Table - '访问控制' (Access Control)
 CREATE TABLE IF NOT EXISTS activity_collaborators (

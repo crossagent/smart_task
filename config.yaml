@@ -12,14 +12,62 @@ agents_pool:
     resource_id: "RES-ARCHITECT-001"
     name: "Architect Agent"
     dir: "smart_task_app/agents/architect"
-    host: "architect_agent"
+    host: "localhost"
     port: 9011
-    default_workspace: "/workspaces/smart_task" # Usually works on the main repo
+    default_workspace: "d:/MyProject/smart_task" # Usually works on the main repo
 
   - id: "coder"
     resource_id: "RES-CODER-001"
     name: "Coder Agent"
     dir: "smart_task_app/agents/coder"
-    host: "coder_agent"
+    host: "localhost"
     port: 9012
-    default_workspace: "/workspaces/smart_task"
+    default_workspace: "d:/MyProject/smart_task"
+
+  - id: "mock_worker"
+    resource_id: "RES-RESEARCHER"
+    name: "Quant Researcher"
+    dir: "smart_task_app/agents"
+    host: "localhost"
+    port: 9013
+    default_workspace: "d:/MyProject/smart_task/workspaces/researcher"
+
+  - id: "mock_worker"
+    resource_id: "RES-TESTER"
+    name: "QA Tester"
+    dir: "smart_task_app/agents"
+    host: "localhost"
+    port: 9014
+    default_workspace: "d:/MyProject/smart_task/workspaces/tester"
+
+  - id: "mock_worker"
+    resource_id: "RES-TRADER"
+    name: "Execution Trader"
+    dir: "smart_task_app/agents"
+    host: "localhost"
+    port: 9015
+    default_workspace: "d:/MyProject/smart_task/workspaces/trader"
+
+  - id: "mock_worker"
+    resource_id: "RES-ANALYST"
+    name: "Data Analyst"
+    dir: "smart_task_app/agents"
+    host: "localhost"
+    port: 9016
+    default_workspace: "d:/MyProject/smart_task/workspaces/analyst"
+
+  - id: "mock_worker"
+    resource_id: "RES-RISK"
+    name: "Risk Manager"
+    dir: "smart_task_app/agents"
+    host: "localhost"
+    port: 9017
+    default_workspace: "d:/MyProject/smart_task/workspaces/risk"
+
+  - id: "mock_worker"
+    resource_id: "RES-DEVOPS"
+    name: "Infra DevOps"
+    dir: "smart_task_app/agents"
+    host: "localhost"
+    port: 9018
+    default_workspace: "d:/MyProject/smart_task/workspaces/devops"

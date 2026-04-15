@@ -1,11 +1,10 @@
 import pytest
 import uuid
 import json
-from src.task_management.db import execute_mutation, query_sql
-from src.task_management.tools import upsert_resource, upsert_task
+from src.task_management.db import execute_mutation
+from src.task_management.tools import upsert_resource, upsert_task, query_sql
 from src.task_execution.scheduler import (
-    run_scheduler_tick, 
-    run_agent_subprocess
+    run_scheduler_tick
 )
 from unittest.mock import patch, MagicMock
 

@@ -151,4 +151,7 @@ def scheduler_daemon():
         run_scheduler_tick()
         time.sleep(5)
 
-import threading # Ensure threading is available for the trigger thread
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    agent_supervisor.load_config()
+    scheduler_daemon()

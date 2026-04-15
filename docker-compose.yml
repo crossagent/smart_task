@@ -91,5 +91,137 @@ services:
     depends_on:
       - db
 
+  researcher_agent:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=smart_task_hub
+      - DB_USER=smart_user
+      - DB_PASSWORD=smart_pass
+      - DEPARTMENT_NAME=Quant_Researcher
+      - PYTHONPATH=.
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9013", "--host", "0.0.0.0", "--log_level", "INFO"]
+    ports:
+      - "9013:9013"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - ./workspaces/researcher:/workspaces
+    depends_on:
+      - db
+
+  tester_agent:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=smart_task_hub
+      - DB_USER=smart_user
+      - DB_PASSWORD=smart_pass
+      - DEPARTMENT_NAME=QA_Tester
+      - PYTHONPATH=.
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9014", "--host", "0.0.0.0", "--log_level", "INFO"]
+    ports:
+      - "9014:9014"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - ./workspaces/tester:/workspaces
+    depends_on:
+      - db
+
+  trader_agent:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=smart_task_hub
+      - DB_USER=smart_user
+      - DB_PASSWORD=smart_pass
+      - DEPARTMENT_NAME=Execution_Trader
+      - PYTHONPATH=.
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9015", "--host", "0.0.0.0", "--log_level", "INFO"]
+    ports:
+      - "9015:9015"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - ./workspaces/trader:/workspaces
+    depends_on:
+      - db
+
+  analyst_agent:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=smart_task_hub
+      - DB_USER=smart_user
+      - DB_PASSWORD=smart_pass
+      - DEPARTMENT_NAME=Data_Analyst
+      - PYTHONPATH=.
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9016", "--host", "0.0.0.0", "--log_level", "INFO"]
+    ports:
+      - "9016:9016"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - ./workspaces/analyst:/workspaces
+    depends_on:
+      - db
+
+  risk_manager_agent:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=smart_task_hub
+      - DB_USER=smart_user
+      - DB_PASSWORD=smart_pass
+      - DEPARTMENT_NAME=Risk_Manager
+      - PYTHONPATH=.
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9017", "--host", "0.0.0.0", "--log_level", "INFO"]
+    ports:
+      - "9017:9017"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - ./workspaces/risk:/workspaces
+    depends_on:
+      - db
+
+  devops_agent:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=smart_task_hub
+      - DB_USER=smart_user
+      - DB_PASSWORD=smart_pass
+      - DEPARTMENT_NAME=Infra_DevOps
+      - PYTHONPATH=.
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9018", "--host", "0.0.0.0", "--log_level", "INFO"]
+    ports:
+      - "9018:9018"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - ./workspaces/devops:/workspaces
+    depends_on:
+      - db
+
 volumes:
   postgres_data:

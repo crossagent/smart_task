@@ -6,7 +6,7 @@ from smart_task_app.agents.architect.agent import root_agent, write_module_desig
 
 def test_architect_agent_loads():
     """Verify the architect agent definition is grammatically correct and loads tools."""
-    assert root_agent.name == "architect_agent"
+    assert root_agent.name == "architect"
     assert root_agent.model == "gemini-2.5-flash"
     assert len(root_agent.tools) == 3
 

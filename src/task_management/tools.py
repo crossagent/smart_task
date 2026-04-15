@@ -203,6 +203,7 @@ def upsert_task(
     resource_id: str,
     resource_name: str,
     module_iteration_goal: str,
+    estimated_hours: Optional[float] = None,
     activity_id: Optional[str] = None,
     project_id: Optional[str] = None,
     activity_benefit: Optional[str] = None,
@@ -213,16 +214,17 @@ def upsert_task(
     sql = """
         INSERT INTO tasks (
             id, module_id, module_name, resource_id, resource_name, 
-            module_iteration_goal, activity_id, project_id, 
+            module_iteration_goal, estimated_hours, activity_id, project_id, 
             activity_benefit, depends_on, status
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET
             module_id = EXCLUDED.module_id,
             module_name = EXCLUDED.module_name,
             resource_id = EXCLUDED.resource_id,
             resource_name = EXCLUDED.resource_name,
             module_iteration_goal = EXCLUDED.module_iteration_goal,
+            estimated_hours = EXCLUDED.estimated_hours,
             activity_id = EXCLUDED.activity_id,
             project_id = EXCLUDED.project_id,
             activity_benefit = EXCLUDED.activity_benefit,
@@ -233,7 +235,7 @@ def upsert_task(
     try:
         execute_mutation(sql, (
             id, module_id, module_name, resource_id, resource_name,
-            module_iteration_goal, activity_id, project_id,
+            module_iteration_goal, estimated_hours, activity_id, project_id,
             activity_benefit, depends_on, status
         ))
         return f"Successfully processed task (ID: {id})."
@@ -300,6 +302,85 @@ def delete_record(table: str, id: str) -> str:
     except Exception as e:
         return f"Error deleting record: {str(e)}"
 
+def report_blocker(task_id: str, reason: str) -> str:
+    """
+    Report a blocker or failure for a task. 
+    Use this tool when encountering API failures, deadlocks, or unresolvable dependencies.
+    It marks the task as 'failed' and logs the blocker reason for the human to review.
+    """
+    sql = "UPDATE tasks SET status = 'failed', blocker_reason = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s"
+    try:
+        execute_mutation(sql, (reason, task_id))
+        return f"Successfully reported blocker for task {task_id}. The system has registered the issue."
+    except Exception as e:
+        return f"Error reporting blocker: {str(e)}"
+
+def get_activity_schedule_report(activity_id: str) -> str:
+    """
+    Generates a human-readable hierarchical Markdown report of the task schedule and status 
+    for a given Activity. It visualizes the plan, ETA, and any current blockers.
+    """
+    try:
+        activity_query = "SELECT name, status, priority FROM activities WHERE id = %s"
+        acts = execute_query(activity_query, (activity_id,))
+        if not acts: return f"Activity {activity_id} not found."
+        act = acts[0]
+
+        # Get Modules progress
+        prog_query = "SELECT completion_percentage FROM v_activity_progress WHERE activity_id = %s"
+        prog = execute_query(prog_query, (activity_id,))
+        completion = prog[0]['completion_percentage'] if prog else 0
+
+        # Get Tasks
+        tasks_query = """
+            SELECT m.name as module_name, t.id, t.module_iteration_goal, t.estimated_hours, t.status, t.blocker_reason
+            FROM tasks t
+            JOIN modules m ON t.module_id = m.id
+            WHERE t.activity_id = %s
+            ORDER BY m.name ASC, t.created_at ASC
+        """
+        tasks = execute_query(tasks_query, (activity_id,))
+
+        status_emoji = {
+            'pending': '⏳',
+            'ready': '🔵',
+            'in_progress': '🔄',
+            'code_done': '🧑‍💻',
+            'done': '🟢',
+            'failed': '🔴',
+            'blocked': '🚫',
+            'needs_human_help': '🆘'
+        }
+
+        report = [f"# Activity: {act['name']} ({act['priority']})"]
+        report.append(f"**Status**: {act['status']}")
+        report.append(f"**Completion**: {completion}%")
+        report.append("\n## Schedule & Tasks")
+
+        total_hours = 0
+        from collections import defaultdict
+        modules_dict = defaultdict(list)
+        for t in tasks:
+            modules_dict[t['module_name']].append(t)
+            if t['estimated_hours']:
+                total_hours += float(t['estimated_hours'])
+        
+        report.append(f"**Estimated Total Effort**: {total_hours} hours\n")
+
+        for mod_name, m_tasks in modules_dict.items():
+            report.append(f"### 📦 Module: {mod_name}")
+            for t in m_tasks:
+                emoji = status_emoji.get(t['status'], '❓')
+                hrs = f"{t['estimated_hours']}h" if t['estimated_hours'] else "N/A"
+                report.append(f"- {emoji} **[{t['status'].upper()}]** {t['module_iteration_goal']} (ID: `{t['id']}`, ETA: {hrs})")
+                if t['blocker_reason'] and t['status'] in ['failed', 'blocked', 'needs_human_help']:
+                    report.append(f"  > **🚨 Blocker**: {t['blocker_reason']}")
+            report.append("")
+
+        return "\n".join(report)
+    except Exception as e:
+        return f"Error generating schedule report: {str(e)}"
+
 def register_tools(mcp: FastMCP):
     """Registers all CRUD database tools to the FastMCP server."""
     mcp.tool()(query_sql)
@@ -312,3 +393,5 @@ def register_tools(mcp: FastMCP):
     mcp.tool()(upsert_task)
     mcp.tool()(delete_record)
     mcp.tool()(get_task_logs)
+    mcp.tool()(report_blocker)
+    mcp.tool()(get_activity_schedule_report)

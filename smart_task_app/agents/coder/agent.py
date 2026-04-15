@@ -53,6 +53,20 @@ def update_task_completed(task_id: str) -> str:
     except Exception as e:
         return str(e)
 
+def report_blocker(task_id: str, reason: str) -> str:
+    """Report a blocker or failure for a task, marking it as failed with the reason."""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE tasks SET status = 'failed', blocker_reason = %s WHERE id = %s", 
+                    (reason, task_id)
+                )
+                conn.commit()
+        return "Task marked as failed and blocker reported."
+    except Exception as e:
+        return str(e)
+
 from google.adk.apps import App
 from google.adk.plugins.logging_plugin import LoggingPlugin
 
@@ -66,9 +80,10 @@ If NO task ID is provided, you should act on the direct instructions provided in
 Perform the implementation natively. You have access to execute_shell which will execute bash/shell commands (like 'ls', 'echo', 'touch').
 Verify your changes using `execute_shell('pytest')` if applicable.
 Ensure you commit your work using git: `execute_shell('git add . && git commit -m "..."')` if it's a code change.
-Finally, if a task ID was provided, mark the task as completed using update_task_completed.
+If you encounter unresolvable environment issues, api errors, or deadlocks, DO NOT silently fail. Use report_blocker to register the blocker with a clear reason, then exit.
+Finally, if a task ID was provided and you succeeded, mark the task as completed using update_task_completed.
 """,
-    tools=[query_context, execute_shell, update_task_completed]
+    tools=[query_context, execute_shell, update_task_completed, report_blocker]
 )
 
 app = App(

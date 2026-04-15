@@ -42,6 +42,7 @@ def record_task_in_sth(
     module_id: str, 
     resource_id: str, 
     module_iteration_goal: str,
+    estimated_hours: float,
     depends_on: List[str] = []
 ) -> str:
     """Records a new broken-down task into the STH database."""
@@ -52,18 +53,19 @@ def record_task_in_sth(
     depends_on_str = "{" + ",".join(depends_on) + "}"
     
     sql = """
-    INSERT INTO tasks (id, module_id, resource_id, module_iteration_goal, depends_on, status)
-    VALUES (%s, %s, %s, %s, %s, 'pending')
+    INSERT INTO tasks (id, module_id, resource_id, module_iteration_goal, estimated_hours, depends_on, status)
+    VALUES (%s, %s, %s, %s, %s, %s, 'pending')
     ON CONFLICT (id) DO UPDATE SET
         module_id = EXCLUDED.module_id,
         resource_id = EXCLUDED.resource_id,
         module_iteration_goal = EXCLUDED.module_iteration_goal,
+        estimated_hours = EXCLUDED.estimated_hours,
         depends_on = EXCLUDED.depends_on
     """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(sql, (task_id, module_id, resource_id, module_iteration_goal, depends_on_str))
+                cursor.execute(sql, (task_id, module_id, resource_id, module_iteration_goal, estimated_hours, depends_on_str))
                 conn.commit()
         return f"Task {task_id} recorded in STH successfully."
     except Exception as e:
@@ -94,6 +96,7 @@ Your responsibilities include:
 1. Writing design docs using write_module_design_doc (which automatically commits to Git).
 2. Recording split tasks into the STH database using record_task_in_sth.
 3. Defining clear module_iteration_goals and correct depends_on arrays (DAG).
+4. Estimating the effort using estimated_hours for each child task (e.g. 2.5, 4.0).
 Finally, if a task ID was provided, mark your task status to 'code_done' using mark_architect_task_done.
 """,
     tools=[write_module_design_doc, record_task_in_sth, mark_architect_task_done]
