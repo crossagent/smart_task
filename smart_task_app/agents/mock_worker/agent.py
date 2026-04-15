@@ -74,9 +74,10 @@ def stay_busy(task_id: str, goal: str) -> str:
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
+                dummy_result = f"Mock {DEPARTMENT_NAME} completed work on {goal} after {int(duration)}s."
                 cursor.execute(
-                    "UPDATE tasks SET status = 'code_done', updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
-                    (task_id,)
+                    "UPDATE tasks SET status = 'code_done', execution_result = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
+                    (dummy_result, task_id)
                 )
                 conn.commit()
     except Exception as e:

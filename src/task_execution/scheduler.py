@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import logging
 import httpx
+import threading
 from src.task_management.db import execute_query, execute_mutation
 from src.resource_management.workspace_lock import workspace_lock_manager
 from src.resource_management.supervisor import agent_supervisor
@@ -20,6 +21,9 @@ def run_scheduler_tick():
 
         # 3. Dispatch ready tasks to persistent agent pool
         _dispatch_ready_tasks()
+
+        # 4. Monitor activity health and trigger activity manager if stalled
+        _monitor_activities()
                 
     except Exception as e:
         logger.error(f"Error in scheduler tick: {e}")
@@ -134,6 +138,55 @@ def self_trigger_agent(url: str, agent_id: str, res_id: str, task_id: str, goal:
         # Revert status to ready if trigger failed so it can be retried
         execute_mutation("UPDATE tasks SET status = 'ready' WHERE id = %s", (task_id,))
         execute_mutation("UPDATE resources SET is_available = True WHERE id = %s", (res_id,))
+
+def _monitor_activities():
+    """
+    Checks if any active Activities have completely stalled or finished.
+    If so, summons the Activity Manager to analyze results and decide next steps.
+    """
+    query = """
+        SELECT a.id, a.project_id, m.id as root_module_id,
+               COUNT(t.id) as total_tasks,
+               COUNT(CASE WHEN t.status IN ('done', 'code_done') THEN 1 END) as completed,
+               COUNT(CASE WHEN t.status IN ('failed', 'blocked') THEN 1 END) as issues,
+               COUNT(CASE WHEN t.status IN ('pending', 'ready', 'in_progress', 'needs_human_help') THEN 1 END) as active
+        FROM activities a
+        JOIN tasks t ON a.id = t.activity_id
+        JOIN modules m ON t.module_id = m.id AND m.parent_module_id IS NULL
+        WHERE a.status = 'Active'
+        GROUP BY a.id, a.project_id, m.id
+        HAVING COUNT(CASE WHEN t.status IN ('pending', 'ready', 'in_progress', 'needs_human_help') THEN 1 END) = 0
+    """
+    stalled_activities = execute_query(query)
+    
+    for act in stalled_activities:
+        act_id = act['id']
+        project_id = act['project_id']
+        root_module_id = act['root_module_id']
+        rev_task_id = f"REV-{act_id}"
+        
+        # Check if intervention task already exists
+        exist_check = execute_query("SELECT id FROM tasks WHERE id = %s", (rev_task_id,))
+        if exist_check:
+            continue
+            
+        logger.warning(f"Activity {act_id} stalled/finished. Summoning Activity Manager.")
+        
+        goal = (f"Review Activity {act_id}. All subtasks are terminal. "
+                f"Completed: {act['completed']}/{act['total_tasks']}. Issues: {act['issues']}. "
+                "Analyze the execution results and either officially close the Activity or break down new tasks to fix issues.")
+                
+        # Insert a special Intervention Task for the Activity Manager
+        sql = """
+            INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, 
+                               module_iteration_goal, estimated_hours, status)
+            VALUES (%s, %s, %s, %s, 'RES-ARCHITECT-001', %s, 1.0, 'ready')
+        """
+        try:
+            execute_mutation(sql, (rev_task_id, project_id, act_id, root_module_id, goal))
+            logger.info(f"Created intervention task {rev_task_id} for Activity Manager.")
+        except Exception as e:
+            logger.error(f"Failed to create intervention task for {act_id}: {e}")
 
 def _cleanup_task_resources(workspace_path: str, resource_id: str):
     """Releases locks and marks resource as available."""

@@ -27,7 +27,7 @@ $$ language 'plpgsql';
 CREATE TABLE IF NOT EXISTS resources (
     id VARCHAR(50) PRIMARY KEY, -- RES-YYYYMMDD-XXXX
     name VARCHAR(100) NOT NULL,
-    resource_type VARCHAR(50) DEFAULT 'human', -- human | architect | coder
+    resource_type VARCHAR(50) DEFAULT 'human', -- human | activity_manager | coder
     agent_dir VARCHAR(255) DEFAULT NULL,
     workspace_path VARCHAR(255) DEFAULT NULL,
     is_available BOOLEAN DEFAULT true,
@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     resource_id VARCHAR(50) NOT NULL REFERENCES resources(id),
     module_iteration_goal TEXT NOT NULL,
     estimated_hours DECIMAL(10,2) DEFAULT NULL,
+    execution_result TEXT DEFAULT NULL,
     status VARCHAR(50) DEFAULT 'pending',
     depends_on VARCHAR(50)[] DEFAULT '{}',
     start_date DATE DEFAULT NULL,

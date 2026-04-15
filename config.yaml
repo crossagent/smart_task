@@ -8,10 +8,10 @@ env:
   WORKSPACE_ROOT: "/workspaces"
 
 agents_pool:
-  - id: "architect"
+  - id: "activity_manager"
     resource_id: "RES-ARCHITECT-001"
-    name: "Architect Agent"
-    dir: "smart_task_app/agents/architect"
+    name: "Activity Manager"
+    dir: "smart_task_app/agents/activity_manager"
     host: "localhost"
     port: 9011
     default_workspace: "d:/MyProject/smart_task" # Usually works on the main repo

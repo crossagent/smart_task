@@ -242,6 +242,25 @@ def upsert_task(
     except Exception as e:
         return f"Error saving task: {str(e)}"
 
+def submit_task_deliverable(
+    task_id: str,
+    status: str,
+    execution_result: str
+) -> str:
+    """
+    Called by an Agent when it has finished working on a task.
+    This officially submits the final result/deliverable back to the hub.
+    Valid statuses: 'code_done', 'done', 'failed', 'blocked', 'needs_human_help'.
+    """
+    sql = "UPDATE tasks SET status = %s, execution_result = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s"
+    try:
+        count = execute_mutation(sql, (status, execution_result, task_id))
+        if count == 0:
+            return f"Error: Task '{task_id}' not found."
+        return f"Task '{task_id}' successfully marked as {status} with deliverables."
+    except Exception as e:
+        return f"Error submitting deliverable: {str(e)}"
+
 def get_task_logs(task_id: str) -> str:
     """
     Retrieve the execution logs (Events) for a given Task ID.
@@ -391,6 +410,7 @@ def register_tools(mcp: FastMCP):
     mcp.tool()(upsert_activity)
     mcp.tool()(upsert_module)
     mcp.tool()(upsert_task)
+    mcp.tool()(submit_task_deliverable)
     mcp.tool()(delete_record)
     mcp.tool()(get_task_logs)
     mcp.tool()(report_blocker)
