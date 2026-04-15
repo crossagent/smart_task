@@ -2,7 +2,7 @@
 
 db_url: "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub"
 
-# Environment mapping for dynamic interpolation (optional)
+# Environment mapping for dynamic interpolation
 env:
   PROJECT_ROOT: "/app"
   WORKSPACE_ROOT: "/workspaces"
@@ -14,60 +14,44 @@ agents_pool:
     dir: "smart_task_app/agents/activity_manager"
     host: "localhost"
     port: 9011
-    default_workspace: "d:/MyProject/smart_task" # Usually works on the main repo
+    default_workspace: "d:/MyProject/smart_task"
 
-  - id: "coder"
+  - id: "quant_developer"
     resource_id: "RES-CODER-001"
-    name: "Coder Agent"
-    dir: "smart_task_app/agents/coder"
+    name: "Quant Developer"
+    dir: "smart_task_app/agents/quant_developer"
     host: "localhost"
     port: 9012
     default_workspace: "d:/MyProject/smart_task"
 
-  - id: "mock_worker"
-    resource_id: "RES-RESEARCHER"
-    name: "Quant Researcher"
-    dir: "smart_task_app/agents"
+  - id: "data_engineer"
+    resource_id: "RES-ANALYST-001"
+    name: "Data Engineer"
+    dir: "smart_task_app/agents/data_engineer"
     host: "localhost"
     port: 9013
-    default_workspace: "d:/MyProject/smart_task/workspaces/researcher"
+    default_workspace: "d:/MyProject/smart_task/workspaces/data_engineer"
 
-  - id: "mock_worker"
-    resource_id: "RES-TESTER"
-    name: "QA Tester"
-    dir: "smart_task_app/agents"
+  - id: "quant_researcher"
+    resource_id: "RES-RESEARCHER-001"
+    name: "Quant Researcher"
+    dir: "smart_task_app/agents/quant_researcher"
     host: "localhost"
     port: 9014
-    default_workspace: "d:/MyProject/smart_task/workspaces/tester"
+    default_workspace: "d:/MyProject/smart_task/workspaces/researcher"
 
-  - id: "mock_worker"
-    resource_id: "RES-TRADER"
-    name: "Execution Trader"
-    dir: "smart_task_app/agents"
+  - id: "risk_manager"
+    resource_id: "RES-RISK-001"
+    name: "Risk Manager"
+    dir: "smart_task_app/agents/risk_manager"
     host: "localhost"
     port: 9015
-    default_workspace: "d:/MyProject/smart_task/workspaces/trader"
+    default_workspace: "d:/MyProject/smart_task/workspaces/risk_manager"
 
-  - id: "mock_worker"
-    resource_id: "RES-ANALYST"
-    name: "Data Analyst"
-    dir: "smart_task_app/agents"
+  - id: "execution_trader"
+    resource_id: "RES-TRADER-001"
+    name: "Execution Trader"
+    dir: "smart_task_app/agents/execution_trader"
     host: "localhost"
     port: 9016
-    default_workspace: "d:/MyProject/smart_task/workspaces/analyst"
-
-  - id: "mock_worker"
-    resource_id: "RES-RISK"
-    name: "Risk Manager"
-    dir: "smart_task_app/agents"
-    host: "localhost"
-    port: 9017
-    default_workspace: "d:/MyProject/smart_task/workspaces/risk"
-
-  - id: "mock_worker"
-    resource_id: "RES-DEVOPS"
-    name: "Infra DevOps"
-    dir: "smart_task_app/agents"
-    host: "localhost"
-    port: 9018
-    default_workspace: "d:/MyProject/smart_task/workspaces/devops"
+    default_workspace: "d:/MyProject/smart_task/workspaces/execution_trader"

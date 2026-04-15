@@ -20,8 +20,6 @@ services:
       dockerfile: ./Dockerfile
     ports:
       - "45666:45666"
-      - "9001:9001"
-      - "9002:9002"
     container_name: smart_task_copilot
     depends_on:
       - db
@@ -34,8 +32,6 @@ services:
       - DB_USER=smart_user
       - DB_PASSWORD=smart_pass
       - SMART_WORKSPACE_ROOT=/workspaces
-      - ARCHITECT_AGENT_URL=http://architect_agent:9011/a2a/architect/.well-known/agent-card.json
-      - CODER_AGENT_URL=http://coder_agent:9012/a2a/coder/.well-known/agent-card.json
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - PYTHONPATH=.
       - AGENT_BASE_PATH=/app
@@ -45,7 +41,7 @@ services:
       - d:/MyProject:/workspaces 
     restart: on-failure
 
-  architect_agent:
+  activity_manager:
     build:
       context: .
       dockerfile: ./Dockerfile
@@ -58,7 +54,7 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - SESSION_SERVICE_URI=postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9011", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk", "--log_level", "DEBUG", "-v"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/activity_manager", "--port", "9011", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
     volumes:
       - .:/app
       - /app/.venv
@@ -67,7 +63,7 @@ services:
     ports:
       - "9011:9011"
 
-  coder_agent:
+  quant_developer:
     build:
       context: .
       dockerfile: ./Dockerfile
@@ -81,7 +77,7 @@ services:
       - SMART_WORKSPACE_ROOT=/workspaces
       - SESSION_SERVICE_URI=postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9012", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/quant_developer", "--port", "9012", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
     ports:
       - "9012:9012"
     volumes:
@@ -91,7 +87,7 @@ services:
     depends_on:
       - db
 
-  researcher_agent:
+  data_engineer:
     build:
       context: .
       dockerfile: ./Dockerfile
@@ -101,11 +97,33 @@ services:
       - DB_NAME=smart_task_hub
       - DB_USER=smart_user
       - DB_PASSWORD=smart_pass
-      - DEPARTMENT_NAME=Quant_Researcher
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9013", "--host", "0.0.0.0", "--log_level", "INFO"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/data_engineer", "--port", "9013", "--host", "0.0.0.0"]
     ports:
       - "9013:9013"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - ./workspaces/data_engineer:/workspaces
+    depends_on:
+      - db
+
+  quant_researcher:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=smart_task_hub
+      - DB_USER=smart_user
+      - DB_PASSWORD=smart_pass
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - PYTHONPATH=.
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/quant_researcher", "--port", "9014", "--host", "0.0.0.0"]
+    ports:
+      - "9014:9014"
     volumes:
       - .:/app
       - /app/.venv
@@ -113,7 +131,7 @@ services:
     depends_on:
       - db
 
-  tester_agent:
+  risk_manager:
     build:
       context: .
       dockerfile: ./Dockerfile
@@ -123,41 +141,19 @@ services:
       - DB_NAME=smart_task_hub
       - DB_USER=smart_user
       - DB_PASSWORD=smart_pass
-      - DEPARTMENT_NAME=QA_Tester
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9014", "--host", "0.0.0.0", "--log_level", "INFO"]
-    ports:
-      - "9014:9014"
-    volumes:
-      - .:/app
-      - /app/.venv
-      - ./workspaces/tester:/workspaces
-    depends_on:
-      - db
-
-  trader_agent:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
-    environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - DEPARTMENT_NAME=Execution_Trader
-      - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9015", "--host", "0.0.0.0", "--log_level", "INFO"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/risk_manager", "--port", "9015", "--host", "0.0.0.0"]
     ports:
       - "9015:9015"
     volumes:
       - .:/app
       - /app/.venv
-      - ./workspaces/trader:/workspaces
+      - ./workspaces/risk_manager:/workspaces
     depends_on:
       - db
 
-  analyst_agent:
+  execution_trader:
     build:
       context: .
       dockerfile: ./Dockerfile
@@ -167,59 +163,15 @@ services:
       - DB_NAME=smart_task_hub
       - DB_USER=smart_user
       - DB_PASSWORD=smart_pass
-      - DEPARTMENT_NAME=Data_Analyst
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9016", "--host", "0.0.0.0", "--log_level", "INFO"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/execution_trader", "--port", "9016", "--host", "0.0.0.0"]
     ports:
       - "9016:9016"
     volumes:
       - .:/app
       - /app/.venv
-      - ./workspaces/analyst:/workspaces
-    depends_on:
-      - db
-
-  risk_manager_agent:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
-    environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - DEPARTMENT_NAME=Risk_Manager
-      - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9017", "--host", "0.0.0.0", "--log_level", "INFO"]
-    ports:
-      - "9017:9017"
-    volumes:
-      - .:/app
-      - /app/.venv
-      - ./workspaces/risk:/workspaces
-    depends_on:
-      - db
-
-  devops_agent:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
-    environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - DEPARTMENT_NAME=Infra_DevOps
-      - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9018", "--host", "0.0.0.0", "--log_level", "INFO"]
-    ports:
-      - "9018:9018"
-    volumes:
-      - .:/app
-      - /app/.venv
-      - ./workspaces/devops:/workspaces
+      - ./workspaces/execution_trader:/workspaces
     depends_on:
       - db
 
