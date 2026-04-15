@@ -34,7 +34,16 @@ services:
       - SMART_WORKSPACE_ROOT=/workspaces
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - PYTHONPATH=.
+      - ALLOWED_HOSTS=*
+      - UVICORN_TRUSTED_HOSTS=*
       - AGENT_BASE_PATH=/app
+      - DOCKER_MANAGED_AGENTS=true
+      - AGENT_ACTIVITY_MANAGER_HOST=activity_manager
+      - AGENT_QUANT_DEVELOPER_HOST=quant_developer
+      - AGENT_DATA_ENGINEER_HOST=data_engineer
+      - AGENT_QUANT_RESEARCHER_HOST=quant_researcher
+      - AGENT_RISK_MANAGER_HOST=risk_manager
+      - AGENT_EXECUTION_TRADER_HOST=execution_trader
     volumes:
       - .:/app
       - /app/.venv
@@ -54,7 +63,7 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - SESSION_SERVICE_URI=postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/activity_manager", "--port", "9011", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9011", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
     volumes:
       - .:/app
       - /app/.venv
@@ -77,7 +86,7 @@ services:
       - SMART_WORKSPACE_ROOT=/workspaces
       - SESSION_SERVICE_URI=postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/quant_developer", "--port", "9012", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9012", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
     ports:
       - "9012:9012"
     volumes:
@@ -99,7 +108,7 @@ services:
       - DB_PASSWORD=smart_pass
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/data_engineer", "--port", "9013", "--host", "0.0.0.0"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9013", "--host", "0.0.0.0"]
     ports:
       - "9013:9013"
     volumes:
@@ -121,7 +130,7 @@ services:
       - DB_PASSWORD=smart_pass
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/quant_researcher", "--port", "9014", "--host", "0.0.0.0"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9014", "--host", "0.0.0.0"]
     ports:
       - "9014:9014"
     volumes:
@@ -143,7 +152,7 @@ services:
       - DB_PASSWORD=smart_pass
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/risk_manager", "--port", "9015", "--host", "0.0.0.0"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9015", "--host", "0.0.0.0"]
     ports:
       - "9015:9015"
     volumes:
@@ -165,7 +174,7 @@ services:
       - DB_PASSWORD=smart_pass
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - PYTHONPATH=.
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents/execution_trader", "--port", "9016", "--host", "0.0.0.0"]
+    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9016", "--host", "0.0.0.0"]
     ports:
       - "9016:9016"
     volumes:

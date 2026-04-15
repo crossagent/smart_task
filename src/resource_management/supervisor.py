@@ -66,13 +66,19 @@ class AgentSupervisor:
             # Load .env for API keys
             load_dotenv()
             for agent_cfg in config.get("agents_pool", []):
+                agent_id = agent_cfg["id"]
+                # Allow environment overrides for Docker networking
+                # e.g. AGENT_activity_manager_HOST=activity_manager
+                env_host = os.getenv(f"AGENT_{agent_id.upper()}_HOST")
+                env_port = os.getenv(f"AGENT_{agent_id.upper()}_PORT")
+                
                 handle = PersistentAgentHandle(
-                    agent_id=agent_cfg["id"],
+                    agent_id=agent_id,
                     resource_id=agent_cfg["resource_id"],
                     dir=agent_cfg["dir"],
-                    port=agent_cfg["port"],
+                    port=int(env_port) if env_port else agent_cfg["port"],
                     workspace=agent_cfg.get("default_workspace", ""),
-                    host=agent_cfg.get("host", "localhost")
+                    host=env_host if env_host else agent_cfg.get("host", "localhost")
                 )
                 self.pool[handle.resource_id] = handle
 

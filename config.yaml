@@ -14,7 +14,7 @@ agents_pool:
     dir: "smart_task_app/agents/activity_manager"
     host: "localhost"
     port: 9011
-    default_workspace: "d:/MyProject/smart_task"
+    default_workspace: "/app"
 
   - id: "quant_developer"
     resource_id: "RES-CODER-001"
@@ -22,7 +22,7 @@ agents_pool:
     dir: "smart_task_app/agents/quant_developer"
     host: "localhost"
     port: 9012
-    default_workspace: "d:/MyProject/smart_task"
+    default_workspace: "/app"
 
   - id: "data_engineer"
     resource_id: "RES-ANALYST-001"
@@ -30,7 +30,7 @@ agents_pool:
     dir: "smart_task_app/agents/data_engineer"
     host: "localhost"
     port: 9013
-    default_workspace: "d:/MyProject/smart_task/workspaces/data_engineer"
+    default_workspace: "/workspaces"
 
   - id: "quant_researcher"
     resource_id: "RES-RESEARCHER-001"
@@ -38,7 +38,7 @@ agents_pool:
     dir: "smart_task_app/agents/quant_researcher"
     host: "localhost"
     port: 9014
-    default_workspace: "d:/MyProject/smart_task/workspaces/researcher"
+    default_workspace: "/workspaces"
 
   - id: "risk_manager"
     resource_id: "RES-RISK-001"
@@ -46,7 +46,7 @@ agents_pool:
     dir: "smart_task_app/agents/risk_manager"
     host: "localhost"
     port: 9015
-    default_workspace: "d:/MyProject/smart_task/workspaces/risk_manager"
+    default_workspace: "/workspaces"
 
   - id: "execution_trader"
     resource_id: "RES-TRADER-001"
@@ -54,4 +54,4 @@ agents_pool:
     dir: "smart_task_app/agents/execution_trader"
     host: "localhost"
     port: 9016
-    default_workspace: "d:/MyProject/smart_task/workspaces/execution_trader"
+    default_workspace: "/workspaces"
