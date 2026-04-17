@@ -157,12 +157,6 @@ def _reconcile_completed_tasks(connection=None):
         logger.info(f"Reconciling completed task {task_id}. Releasing resource {res_id}.")
         _cleanup_task_resources(workspace_path, res_id, connection=connection)
 
-        # AUTO-RECONCILE: If this was a Lead Task, also mark its bundled siblings as done
-        execute_mutation("""
-            UPDATE tasks SET status = 'done', updated_at = CURRENT_TIMESTAMP 
-            WHERE parent_interrupt_id = %s AND status = 'ready'
-        """, (task_id,), connection=connection)
-
 def _dispatch_ready_tasks(connection=None):
     # 1. Grab all ready tasks
     all_ready = execute_query("""
@@ -182,7 +176,7 @@ def _dispatch_ready_tasks(connection=None):
     for t in all_ready:
         tasks_by_res[t['res_id']].append(t)
 
-    # 3. Dispatch Grouped
+    # 3. Dispatch Grouped (Single Trigger per Agent)
     for res_id, tasks in tasks_by_res.items():
         # Check if the agent is actually up in the pool
         handle = agent_supervisor.pool.get(res_id)
@@ -190,31 +184,20 @@ def _dispatch_ready_tasks(connection=None):
             logger.warning(f"Task {tasks[0]['task_id']} deferred: Resource {res_id} not found in persistent pool.")
             continue
             
-        # Lead Task Selection
+        # Pick the most recent task to trigger the agent
         lead = tasks[0]
         lead_id = lead['task_id']
-        workspace_path = lead['workspace_path']
         final_goal = lead['module_iteration_goal']
         
-        # Batching/Bundling Logic
-        bundled_ids = [t['task_id'] for t in tasks[1:]]
-        if bundled_ids:
-            logger.info(f"Bundling {len(bundled_ids)} tasks with Lead Task {lead_id} for resource {res_id}")
-            final_goal += f"\n\n[SYSTEM] PARALLEL INTERRUPTS DETECTED: {bundled_ids}. " \
-                          f"Please use 'get_task_details' to inspect all involved tasks and provide a consolidated solution."
-            
-            # Persist Relationship
-            for sid in bundled_ids:
-                execute_mutation("UPDATE tasks SET parent_interrupt_id = %s WHERE id = %s", (lead_id, sid), connection=connection)
-
+        # Note: We send just one task, the PM is instructed to scan for all others
         agent_url = handle['url']
         agent_id = handle['agent_id']
         
-        # Atomically mark resource as busy and Lead Task as in_progress
+        # Mark as busy and dispatch
         execute_mutation("UPDATE resources SET is_available = False WHERE id = %s", (res_id,), connection=connection)
         execute_mutation("UPDATE tasks SET status = 'in_progress' WHERE id = %s", (lead_id,), connection=connection)
         
-        logger.info(f"Dispatching Lead Task {lead_id} to {res_id} at {agent_url}. (Bundled: {bundled_ids})")
+        logger.info(f"Dispatching wake-up task {lead_id} to Resource {res_id}. Agent is expected to scan for other {len(tasks)-1} pending tasks.")
         
         threading.Thread(target=_trigger_agent_async, args=(agent_url, agent_id, lead_id, res_id, final_goal)).start()
 

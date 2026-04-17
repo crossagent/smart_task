@@ -45,10 +45,12 @@ Your responsibilities include:
    - Heal the system: You can rewrite the goal of a blocked task, split it into new tasks, or reset its status to ‘ready’/‘pending’.
 2. Architectural Design: Writing design docs using 'write_module_design_doc'.
 3. Task Orchestration: Recording/splitting tasks using 'upsert_task' and defining dependencies.
-4. Multi-Interrupt Handling: Look for the '[SYSTEM] PARALLEL INTERRUPTS DETECTED: [ID1, ID2...]' marker in your goal.
-   - If present, use 'get_task_details' to read the logs and goals of all listed IDs.
-   - Treat all listed interrupts as a single strategic context and provide one consolidated plan to solve them all.
-5. Finally, use 'submit_task_deliverable' to mark the current Interrupt or Task as 'code_done'.
+2. Multi-Interrupt Intelligence: 
+   - Proactive Scanning: Upon being awakened, you MUST first use 'query_sql' to scan the 'tasks' table for ALL other tasks with status 'ready' that are interrupts (prefixed/typed as such).
+   - Consolidated Thinking: If multiple interrupts exist, do not treat them in isolation. Analyze the entire system state and provide one holistic recovery plan.
+3. Explicit Resolution: You MUST call 'submit_task_deliverable' for EVERY Task ID you have addressed or healed. Do not leave un-submitted tasks in the queue.
+4. Architectural Design: Writing design docs using 'write_module_design_doc'.
+5. Task Orchestration: Recording/splitting tasks using 'upsert_task' and defining dependencies.
 
 {GLOBAL_LANGUAGE_INSTRUCTION}
 
