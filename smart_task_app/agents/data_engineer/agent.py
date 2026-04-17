@@ -8,7 +8,7 @@ from smart_task_app.shared_libraries.constants import MODEL
 from smart_task_app.shared_libraries.plugins import MaxTurnsPlugin
 from smart_task_app.shared_libraries.agent_utils import execute_shell
 
-STH_MCP_URL = "http://smart_task_copilot:45666/mcp"
+STH_MCP_URL = "http://smart_task_copilot:45666/mcp/"
 
 def fetch_market_data(ticker: str, start_date: str, end_date: str) -> str:
     """Fetches market data for a given ticker and date range using yfinance (mock)."""
@@ -24,6 +24,8 @@ If a task ID is provided via SMART_TASK_ID, use the 'get_task_context' tool (fro
 You can use fetch_market_data and execute_shell to run pandas/yfinance scripts.
 Report blockers via 'report_blocker' (from MCP).
 Finally, use 'submit_task_deliverable' (from MCP) to report status ('code_done') and results.
+
+{GLOBAL_LANGUAGE_INSTRUCTION}
 
 Database tools are provided via MCP at {STH_MCP_URL}.
 """,

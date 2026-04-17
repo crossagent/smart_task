@@ -4,12 +4,12 @@ from google.adk.agents import LlmAgent
 from google.adk.apps import App
 from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
-from smart_task_app.shared_libraries.constants import MODEL
+from smart_task_app.shared_libraries.constants import MODEL, GLOBAL_LANGUAGE_INSTRUCTION
 from smart_task_app.shared_libraries.plugins import MaxTurnsPlugin
 from smart_task_app.shared_libraries.agent_utils import execute_shell
 
 # Global MCP中枢地址 (Docker内部网桥地址)
-STH_MCP_URL = "http://smart_task_copilot:45666/mcp"
+STH_MCP_URL = "http://smart_task_copilot:45666/mcp/"
 
 root_agent = LlmAgent(
     name="quant_developer",
@@ -21,6 +21,8 @@ If a task ID is provided via SMART_TASK_ID, use the 'get_task_context' tool (fro
 Perform implementation tasks and run tests using 'execute_shell'.
 If you run into unresolvable issues, use 'report_blocker' (from MCP).
 Finally, ALWAYS use 'submit_task_deliverable' (from MCP) to report your work status ('code_done') and summary.
+
+{GLOBAL_LANGUAGE_INSTRUCTION}
 
 Note: Database tools are provided via the centralized MCP server at {STH_MCP_URL}.
 """,

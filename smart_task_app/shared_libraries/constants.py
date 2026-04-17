@@ -66,4 +66,12 @@ if not package_logger.handlers:
 #    使用 getChild 保持模块名信息，但继承 package_logger 的配置
 logger = package_logger.getChild(__name__)
 
-__all__ = ["MODEL", "USER_TIMEZONE", "package_logger", "logger"]
+# 6. Global Instruction Directive
+GLOBAL_LANGUAGE_INSTRUCTION = """
+# MANDATORY LANGUAGE POLICY
+- All outputs (including but not limited to 'module_iteration_goal', 'summary', and 'deliverables') MUST be in CHINESE.
+- All reasoning and responses to the user or other agents MUST be in CHINESE.
+- Ensure technical precision while using Chinese for engineering descriptions.
+"""
+
+__all__ = ["MODEL", "USER_TIMEZONE", "package_logger", "logger", "GLOBAL_LANGUAGE_INSTRUCTION"]

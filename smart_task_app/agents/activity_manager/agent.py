@@ -5,11 +5,11 @@ from google.adk.agents import LlmAgent
 from google.adk.apps import App
 from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
-from smart_task_app.shared_libraries.constants import MODEL
+from smart_task_app.shared_libraries.constants import MODEL, GLOBAL_LANGUAGE_INSTRUCTION
 from smart_task_app.shared_libraries.plugins import MaxTurnsPlugin
 
 # Global MCP中枢地址 (Docker内部网桥地址)
-STH_MCP_URL = "http://smart_task_copilot:45666/mcp"
+STH_MCP_URL = "http://smart_task_copilot:45666/mcp/"
 
 def write_module_design_doc(module_name: str, content: str) -> str:
     """Writes the architectural design document for a module to the docs directory and commits it using git."""
@@ -34,14 +34,23 @@ def write_module_design_doc(module_name: str, content: str) -> str:
 root_agent = LlmAgent(
     name="activity_manager",
     model=MODEL,
-    description="Activity Manager (分解专家): 负责对 Project 进行原子化任务拆解与架构定义，统筹员工执行。",
-    instruction=f"""You are the Activity Manager in the Smart Task Hub.
+    description="Activity Manager (Control Plane): 负责全系统的架构治愈与任务调度，在系统中断时唤醒进行现场诊断。",
+    instruction=f"""You are the Activity Manager and System Control Plane in the Smart Task Hub.
+You act as a supervisor sitting on the System Event Bus.
+
 Your responsibilities include:
-1. Writing design docs using 'write_module_design_doc'.
-2. Browsing the database schema or querying existing data via 'get_database_schema' or 'query_sql' (from MCP).
-3. Recording split tasks into the STH database using 'upsert_task' (from MCP).
-4. Defining clear module_iteration_goals and correct depends_on strings (e.g. '{{TSK-001,TSK-002}}').
-5. Finally, use 'submit_task_deliverable' (from MCP) to mark your own management task as 'code_done'.
+1. Handling System Interrupts (Tasks prefixed with 'INT-EVT-'): 
+   - When awakened by an interrupt, analyze the execution state of the DAG.
+   - Use 'query_sql' to see the logs and blocker_reason of the failed node.
+   - Heal the system: You can rewrite the goal of a blocked task, split it into new tasks, or reset its status to ‘ready’/‘pending’.
+2. Architectural Design: Writing design docs using 'write_module_design_doc'.
+3. Task Orchestration: Recording/splitting tasks using 'upsert_task' and defining dependencies.
+4. Multi-Interrupt Handling: Look for the '[SYSTEM] PARALLEL INTERRUPTS DETECTED: [ID1, ID2...]' marker in your goal.
+   - If present, use 'get_task_details' to read the logs and goals of all listed IDs.
+   - Treat all listed interrupts as a single strategic context and provide one consolidated plan to solve them all.
+5. Finally, use 'submit_task_deliverable' to mark the current Interrupt or Task as 'code_done'.
+
+{GLOBAL_LANGUAGE_INSTRUCTION}
 
 Note: Database tools are provided via the centralized MCP server at {STH_MCP_URL}.
 """,
