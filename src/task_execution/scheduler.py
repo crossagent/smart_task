@@ -6,7 +6,6 @@ import logging
 import httpx
 import threading
 from src.task_management.db import execute_query, execute_mutation, db_transaction
-from src.resource_management.workspace_lock import workspace_lock_manager
 from src.resource_management.supervisor import agent_supervisor
 
 logger = logging.getLogger("smart_task.task_execution.scheduler")
@@ -50,10 +49,6 @@ def run_system_bus_cycle():
                 
                 # Dispatch ready tasks to persistent agent pool (Execution start)
                 _dispatch_ready_tasks(connection=conn)
-
-            # 4. PRIORITY 2: System Health & Maintenance
-            # Reconcile active locks and clear stale entries
-            _reconcile_active_locks(connection=conn)
 
             # Reconcile completed tasks to release resources
             _reconcile_completed_tasks(connection=conn)
@@ -285,58 +280,12 @@ def _watch_for_interrupts(connection=None):
     except Exception as e:
         logger.error(f"Failed to emit interrupts: {e}")
 
-def _reconcile_active_locks(connection=None):
-    """
-    Watchdog: Scans for physical lock files and reconciles them with the database.
-    Releases locks for tasks that are no longer 'in_progress'.
-    """
-    try:
-        # 1. Gather all directories to scan
-        # We scan the root /app and any sub-workspaces
-        scan_dirs = ["/app", "/app/workspaces"]
-        
-        # 2. Identify all physical locks
-        locks_found = {} # Path -> Task ID
-        for base in scan_dirs:
-            if not os.path.isdir(base): continue
-            for root, _, files in os.walk(base):
-                if ".smart_task.lock" in files:
-                    full_path = os.path.join(root, ".smart_task.lock")
-                    try:
-                        with open(full_path, "r", encoding="utf-8") as f:
-                            task_id = f.read().strip()
-                            locks_found[root] = task_id
-                    except: pass
-
-        if not locks_found:
-            return
-
-        # 3. Batch check statuses in DB
-        task_ids = list(set(locks_found.values()))
-        placeholders = ','.join(['%s']*len(task_ids))
-        query = f"SELECT id, status FROM tasks WHERE id IN ({placeholders})"
-        statuses = {t['id']: t['status'] for t in execute_query(query, tuple(task_ids), connection=connection)}
-
-        # 4. Cleanup inconsistent locks
-        for workspace_path, task_id in locks_found.items():
-            db_status = statuses.get(task_id)
-            
-            # If task not in DB, or status is not 'in_progress' -> Release
-            if not db_status or db_status != 'in_progress':
-                logger.warning(f"Watchdog: Found stale lock for task {task_id} (Status: {db_status}) at {workspace_path}. Reclaiming.")
-                _cleanup_task_resources(workspace_path, None, connection=connection) # res_id is None since we don't know it here
-    except Exception as e:
-        logger.error(f"Watchdog error: {e}")
-
 def _cleanup_task_resources(workspace_path: str, resource_id: Optional[str], connection=None):
-    """Releases locks and marks resource as available."""
+    """Marks resource as available."""
     try:
-        if workspace_path:
-            workspace_lock_manager.unlock(workspace_path)
-        
         if resource_id:
             execute_mutation("UPDATE resources SET is_available = True WHERE id = %s", (resource_id,), connection=connection)
-            logger.info(f"Cleaned up resources for Agent {resource_id} and Workspace {workspace_path}")
+            logger.info(f"Released resource {resource_id}")
     except Exception as e:
         logger.error(f"Cleanup error for resource {resource_id}: {e}")
 

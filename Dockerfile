@@ -4,6 +4,19 @@ FROM python:3.13-slim
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+# Install system dependencies (Git, SSH, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    openssh-client \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Basic Git Configuration
+RUN git config --global user.name "Smart Task Agent" && \
+    git config --global user.email "agent@smart-task.hub" && \
+    git config --global pull.rebase true && \
+    git config --global rebase.autoStash true
+
 # Set the working directory in the container
 WORKDIR /app
 

@@ -44,10 +44,9 @@ services:
       - AGENT_QUANT_RESEARCHER_HOST=quant_researcher
       - AGENT_RISK_MANAGER_HOST=risk_manager
       - AGENT_EXECUTION_TRADER_HOST=execution_trader
-    volumes:
-      - .:/app
-      - /app/.venv
-      - d:/MyProject:/workspaces 
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
+    # REMOVED: local volume binds for 100% isolation
     restart: on-failure
 
   activity_manager:
@@ -65,10 +64,10 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9011", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
-    volumes:
-      - .:/app
-      - /app/.venv
+    # REMOVED: local volume binds for 100% isolation
     depends_on:
       - db
     ports:
@@ -90,13 +89,12 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9012", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
     ports:
       - "9012:9012"
-    volumes:
-      - .:/app
-      - /app/.venv
-      - d:/MyProject:/workspaces
+    # REMOVED: local volume binds for 100% isolation
     depends_on:
       - db
 
@@ -114,13 +112,12 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9013", "--host", "0.0.0.0"]
     ports:
       - "9013:9013"
-    volumes:
-      - .:/app
-      - /app/.venv
-      - ./workspaces/data_engineer:/workspaces
+    # REMOVED: local volume binds for 100% isolation
     depends_on:
       - db
 
@@ -138,13 +135,12 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9014", "--host", "0.0.0.0"]
     ports:
       - "9014:9014"
-    volumes:
-      - .:/app
-      - /app/.venv
-      - ./workspaces/researcher:/workspaces
+    # REMOVED: local volume binds for 100% isolation
     depends_on:
       - db
 
@@ -162,13 +158,12 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9015", "--host", "0.0.0.0"]
     ports:
       - "9015:9015"
-    volumes:
-      - .:/app
-      - /app/.venv
-      - ./workspaces/risk_manager:/workspaces
+    # REMOVED: local volume binds for 100% isolation
     depends_on:
       - db
 
@@ -186,13 +181,12 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9016", "--host", "0.0.0.0"]
     ports:
       - "9016:9016"
-    volumes:
-      - .:/app
-      - /app/.venv
-      - ./workspaces/execution_trader:/workspaces
+    # REMOVED: local volume binds for 100% isolation
     depends_on:
       - db
 

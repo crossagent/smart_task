@@ -5,7 +5,7 @@ from google.adk.apps import App
 from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
 from smart_task_app.shared_libraries.constants import MODEL, GLOBAL_LANGUAGE_INSTRUCTION
-from smart_task_app.shared_libraries.plugins import MaxTurnsPlugin
+from smart_task_app.shared_libraries.plugins import MaxTurnsPlugin, GitSyncPlugin
 from smart_task_app.shared_libraries.agent_utils import execute_shell
 
 # Global MCP中枢地址 (Docker内部网桥地址)
@@ -37,5 +37,5 @@ Note: Database tools are provided via the centralized MCP server at {STH_MCP_URL
 app = App(
     name="quant_developer",
     root_agent=root_agent,
-    plugins=[MaxTurnsPlugin(max_turns=3)]
+    plugins=[MaxTurnsPlugin(max_turns=3), GitSyncPlugin()]
 )

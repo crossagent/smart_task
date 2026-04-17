@@ -6,7 +6,7 @@ from google.adk.apps import App
 from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
 from smart_task_app.shared_libraries.constants import MODEL, GLOBAL_LANGUAGE_INSTRUCTION
-from smart_task_app.shared_libraries.plugins import MaxTurnsPlugin
+from smart_task_app.shared_libraries.plugins import MaxTurnsPlugin, GitSyncPlugin
 
 # Global MCP中枢地址 (Docker内部网桥地址)
 STH_MCP_URL = "http://smart_task_copilot:45666/mcp/"
@@ -23,9 +23,9 @@ def write_module_design_doc(module_name: str, content: str) -> str:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
             
-        # Perform git add and commit
-        subprocess.run(["git", "add", file_path], cwd=project_root, check=True)
-        subprocess.run(["git", "commit", "-m", f"docs: Activity Manager updated design for module {module_name}"], cwd=project_root, check=True)
+        # REMOVED: direct git commit. Handled by GitSyncPlugin globally.
+        # subprocess.run(["git", "add", file_path], cwd=project_root, check=True)
+        # subprocess.run(["git", "commit", "-m", f"docs: Activity Manager updated design for module {module_name}"], cwd=project_root, check=True)
             
         return f"Successfully wrote and committed design document to {file_path}"
     except Exception as e:
@@ -67,5 +67,5 @@ Note: Database tools are provided via the centralized MCP server at {STH_MCP_URL
 app = App(
     name="activity_manager",
     root_agent=root_agent,
-    plugins=[MaxTurnsPlugin(max_turns=3)]
+    plugins=[MaxTurnsPlugin(max_turns=3), GitSyncPlugin()]
 )
