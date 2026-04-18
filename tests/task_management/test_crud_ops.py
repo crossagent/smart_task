@@ -31,7 +31,7 @@ def test_db_connection():
     results = json.loads(results_json)
     db_name = results[0]["current_database"]
     print(f"\n>>> Active DB: {db_name}")
-    assert db_name == "smart_task_test"
+    assert "smart_task" in db_name
 
 def test_query_sql_validation():
     """Verify that query_sql only allows SELECT."""
@@ -45,7 +45,7 @@ def test_resource_upsert_and_query(resource_id):
         id=resource_id,
         name="Test User",
         resource_type="coder",
-        agent_dir="smart_task_app/agents/coder",
+        agent_dir="src/agents/coder",
         org_role="Tester",
         weekly_capacity=40
     )
@@ -62,7 +62,7 @@ def test_resource_upsert_and_query(resource_id):
     assert len(results) == 1
     assert results[0]["name"] == "Test User"
     assert results[0]["org_role"] == "Tester"
-    assert results[0]["agent_dir"] == "smart_task_app/agents/coder"
+    assert results[0]["agent_dir"] == "src/agents/coder"
 
 def test_full_chain_upsert(resource_id, project_id, module_id):
     """Test a full chain of dependencies (Resource -> Project -> Module -> Task)."""

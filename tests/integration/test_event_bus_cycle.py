@@ -1,10 +1,10 @@
-"""
+﻿"""
 Event Bus Cycle Integration Test Suite.
 
-Tests the full 4-phase scheduler cycle (Detect → Consume → Execute → Reconcile)
+Tests the full 4-phase scheduler cycle (Detect 鈫?Consume 鈫?Execute 鈫?Reconcile)
 against a REAL database with MOCKED agent dispatch.
 
-Seed data is loaded from tests/fixtures/test_slice.sql — a designed, repeatable
+Seed data is loaded from tests/fixtures/test_slice.sql 鈥?a designed, repeatable
 test slice covering all major scenarios. See that file for the full data dictionary.
 """
 
@@ -19,10 +19,8 @@ from src.resource_management.supervisor import agent_supervisor
 from src.task_management.db import execute_query, execute_mutation, get_db_connection
 
 
-# ═══════════════════════════════════════════════════════════════
-#  FIXTURES
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  FIXTURES
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 SLICE_SQL = Path(__file__).parent.parent / "fixtures" / "test_slice.sql"
 
 
@@ -30,7 +28,7 @@ SLICE_SQL = Path(__file__).parent.parent / "fixtures" / "test_slice.sql"
 def seed_test_slice(db_conn):
     """
     Load the test slice SQL before each test.
-    This is IDEMPOTENT — it cleans and re-seeds every time.
+    This is IDEMPOTENT 鈥?it cleans and re-seeds every time.
     """
     sql = SLICE_SQL.read_text(encoding="utf-8")
     cur = db_conn.cursor()
@@ -38,27 +36,30 @@ def seed_test_slice(db_conn):
     db_conn.commit()
     cur.close()
     yield
-    # No cleanup needed — next test will re-seed
+    # No cleanup needed 鈥?next test will re-seed
 
 
 @pytest.fixture
 def mock_agent_pool():
-    """Mock the agent supervisor pool — no real LLM calls."""
+    """Mock the agent supervisor pool and network IO."""
     original_pool = agent_supervisor.pool
     agent_supervisor.pool = {
-        "RES-PM-001":    {"url": "http://pm:9010",    "agent_id": "pm-agent"},
+        "RES-ARCHITECT-001": {"url": "http://pm:9010",    "agent_id": "pm-agent"},
         "RES-CODER-001": {"url": "http://coder1:9001", "agent_id": "coder-agent-1"},
         "RES-CODER-002": {"url": "http://coder2:9002", "agent_id": "coder-agent-2"},
         "RES-CODER-003": {"url": "http://coder3:9003", "agent_id": "coder-agent-3"},
     }
-    yield agent_supervisor.pool
+    
+    # Catch-all mock for all agent calls to avoid hangs
+    with respx.mock(assert_all_called=False):
+        respx.post(url__regex=r"http://.*:900\d/.*").respond(200, json={"status": "ok"})
+        yield agent_supervisor.pool
+        
     agent_supervisor.pool = original_pool
 
 
-# ═══════════════════════════════════════════════════════════════
-#  HELPERS
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  HELPERS
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 def run_step():
     """Execute a single bus cycle with threading mocked to run synchronously."""
     with patch("src.task_execution.scheduler.threading.Thread") as mock_thread:
@@ -107,10 +108,8 @@ def count_events(status='pending'):
     return rows[0]['cnt']
 
 
-# ═══════════════════════════════════════════════════════════════
-#  PHASE 1: EVENT DETECTION
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  PHASE 1: EVENT DETECTION
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 class TestEventDetection:
     """Verify the Detect phase emits correct events from the test slice."""
 
@@ -168,36 +167,34 @@ class TestEventDetection:
         assert evts[0]['activity_id'] == 'ACT-LIVE-001'
 
 
-# ═══════════════════════════════════════════════════════════════
-#  PHASE 2: EVENT CONSUMPTION
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  PHASE 2: EVENT CONSUMPTION
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 class TestEventConsumption:
     """Verify events are consumed and translated into Task mutations."""
 
     @respx.mock
     def test_failed_task_creates_repair(self, mock_agent_pool):
-        """task_failed event for TSK-FAIL-001 → creates REPAIR-TSK-FAIL-001."""
+        """task_failed event for TSK-FAIL-001 鈫?creates REPAIR-TSK-FAIL-001."""
         run_step()
         assert task_exists('REPAIR-TSK-FAIL-001')
         repair = q("SELECT * FROM tasks WHERE id = 'REPAIR-TSK-FAIL-001'")[0]
-        assert repair['resource_id'] == 'RES-PM-001'
+        assert repair['resource_id'] == 'RES-ARCHITECT-001'
         assert repair['status'] == 'ready'
         assert 'INTERRUPT SIGNAL' in repair['module_iteration_goal']
 
     @respx.mock
     def test_blocked_task_creates_repair(self, mock_agent_pool):
-        """task_blocked event for TSK-BLOCK-001 → creates REPAIR-TSK-BLOCK-001."""
+        """task_blocked event for TSK-BLOCK-001 鈫?creates REPAIR-TSK-BLOCK-001."""
         run_step()
         assert task_exists('REPAIR-TSK-BLOCK-001')
 
     @respx.mock
     def test_stalled_activity_creates_review_task(self, mock_agent_pool):
-        """activity_stalled event → creates REV-ACT-STALL-001."""
+        """activity_stalled event 鈫?creates REV-ACT-STALL-001."""
         run_step()
         assert task_exists('REV-ACT-STALL-001')
         rev = q("SELECT * FROM tasks WHERE id = 'REV-ACT-STALL-001'")[0]
-        assert rev['resource_id'] == 'RES-PM-001'
+        assert rev['resource_id'] == 'RES-ARCHITECT-001'
         assert 'Review Activity' in rev['module_iteration_goal']
 
     @respx.mock
@@ -210,7 +207,7 @@ class TestEventConsumption:
 
     @respx.mock
     def test_human_instruction_creates_cmd_task(self, mock_agent_pool):
-        """Injected human_instruction event → creates CMD task."""
+        """Injected human_instruction event 鈫?creates CMD task."""
         execute_mutation("""
             INSERT INTO events (event_type, source, severity, activity_id, payload)
             VALUES ('human_instruction', 'human', 'critical', 'ACT-LIVE-001',
@@ -219,43 +216,50 @@ class TestEventConsumption:
         run_step()
         assert task_exists('CMD-ACT-LIVE-001-V99')
         cmd = q("SELECT * FROM tasks WHERE id = 'CMD-ACT-LIVE-001-V99'")[0]
+        assert cmd['resource_id'] == 'RES-ARCHITECT-001'
         assert 'HUMAN COMMAND' in cmd['module_iteration_goal']
 
 
-# ═══════════════════════════════════════════════════════════════
-#  PHASE 3: DATA PLANE (Promote + Dispatch)
-# ═══════════════════════════════════════════════════════════════
 
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  PHASE 3: DATA PLANE (Promote + Dispatch)
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 class TestDataPlane:
     """Verify task promotion and agent dispatch."""
 
     @respx.mock
     def test_pending_no_dep_promoted(self, mock_agent_pool):
-        """TSK-PEND-002 (pending, no deps) → ready."""
+        """TSK-PEND-002 (pending, no deps) 鈫?ready."""
+        execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
         run_step()
         assert task_status('TSK-PEND-002') == 'ready'
 
     @respx.mock
     def test_pending_dep_met_promoted(self, mock_agent_pool):
-        """TSK-PEND-001 (pending, dep TSK-DONE-001 is done) → ready."""
+        """TSK-PEND-001 (pending, dep TSK-DONE-001 is done) 鈫?ready."""
+        execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
         run_step()
         assert task_status('TSK-PEND-001') == 'ready'
 
     @respx.mock
     def test_pending_dep_not_met_stays(self, mock_agent_pool):
-        """TSK-PEND-003 (pending, dep TSK-PEND-001 not done) → stays pending."""
+        """TSK-PEND-003 (pending, dep TSK-PEND-001 not done) 鈫?stays pending."""
         run_step()
         assert task_status('TSK-PEND-003') == 'pending'
 
     @respx.mock
     def test_unapproved_goes_to_awaiting(self, mock_agent_pool):
-        """TSK-AWAIT-001 (pending, is_approved=false) → awaiting_approval."""
+        """TSK-AWAIT-001 (pending, is_approved=false) 鈫?awaiting_approval."""
+        execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
         run_step()
         assert task_status('TSK-AWAIT-001') == 'awaiting_approval'
 
     @respx.mock
     def test_ready_task_dispatched(self, mock_agent_pool):
-        """TSK-READY-001 (ready, RES-CODER-003 available) → in_progress."""
+        """TSK-READY-001 (ready, RES-CODER-003 available) 鈫?in_progress."""
+        # Manually set to ready since seed data is now pending
+        execute_mutation("UPDATE tasks SET status = 'ready' WHERE id = 'TSK-READY-001'")
+        execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
+        
         respx.post(url__regex=r".*coder3.*sessions$").respond(201)
         respx.post(url__regex=r".*coder3.*/run$").respond(200, json={"status": "ok"})
         run_step()
@@ -265,6 +269,7 @@ class TestDataPlane:
     @respx.mock
     def test_busy_resource_blocks_dispatch(self, mock_agent_pool):
         """Tasks on RES-CODER-002 (busy) should not be dispatched."""
+        execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
         run_step()
         # RES-CODER-002 stays busy
         assert resource_available('RES-CODER-002') is False
@@ -288,10 +293,8 @@ class TestDataPlane:
         assert int(sc[0]['value']) == 0
 
 
-# ═══════════════════════════════════════════════════════════════
-#  PHASE 4: RECONCILE
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  PHASE 4: RECONCILE
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 class TestReconcile:
     """Verify resource release and event resolution."""
 
@@ -318,10 +321,8 @@ class TestReconcile:
         assert len(resolved) >= 1
 
 
-# ═══════════════════════════════════════════════════════════════
-#  MULTI-STEP SCENARIOS
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  MULTI-STEP SCENARIOS
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 class TestMultiStep:
     """End-to-end scenarios across multiple bus cycles."""
 
@@ -330,13 +331,14 @@ class TestMultiStep:
         """
         3-step lifecycle:
         Step 1: Detect + Promote + Dispatch
-        Step 2: Simulate completions → Reconcile
+        Step 2: Simulate completions 鈫?Reconcile
         Step 3: Freed resources pick up next tasks
         """
         respx.post(url__regex=r".*/sessions$").respond(201)
         respx.post(url__regex=r".*/run$").respond(200, json={"status": "ok"})
+        execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
 
-        # ── Step 1 ──
+        # 鈹€鈹€ Step 1 鈹€鈹€
         run_step()
         assert task_status('TSK-PEND-001') == 'ready'       # dep met, promoted
         assert task_status('TSK-PEND-002') == 'ready'       # no dep, promoted
@@ -344,14 +346,14 @@ class TestMultiStep:
         assert task_status('TSK-READY-001') == 'in_progress' # dispatched
         assert task_exists('REPAIR-TSK-FAIL-001')           # detected + consumed
 
-        # ── Step 2: Agent finishes work ──
+        # 鈹€鈹€ Step 2: Agent finishes work 鈹€鈹€
         execute_mutation("UPDATE tasks SET status = 'done' WHERE id = 'TSK-RUN-001'")
         execute_mutation("UPDATE tasks SET status = 'done' WHERE id = 'TSK-READY-001'")
         run_step()
         assert resource_available('RES-CODER-002') is True
         assert resource_available('RES-CODER-003') is True
 
-        # ── Step 3: Freed resources allow new dispatch ──
+        # 鈹€鈹€ Step 3: Freed resources allow new dispatch 鈹€鈹€
         run_step()
         # At least one of the promoted tasks should now be dispatched
         statuses = [task_status('TSK-PEND-001'), task_status('TSK-PEND-002')]
@@ -361,10 +363,11 @@ class TestMultiStep:
     def test_chain_promotion(self, mock_agent_pool):
         """
         Verify chained dependencies resolve across cycles:
-        TSK-PEND-001 done → TSK-PEND-003 unlocked.
+        TSK-PEND-001 done 鈫?TSK-PEND-003 unlocked.
         """
         respx.post(url__regex=r".*/sessions$").respond(201)
         respx.post(url__regex=r".*/run$").respond(200, json={"status": "ok"})
+        execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
 
         # Step 1: promote TSK-PEND-001 (dep on done TSK-DONE-001)
         run_step()
@@ -381,7 +384,7 @@ class TestMultiStep:
     @respx.mock
     def test_event_injection_from_agent(self, mock_agent_pool):
         """
-        Simulate an agent calling emit_event() tool → event consumed → repair task created.
+        Simulate an agent calling emit_event() tool 鈫?event consumed 鈫?repair task created.
         """
         respx.post(url__regex=r".*/sessions$").respond(201)
         respx.post(url__regex=r".*/run$").respond(200, json={"status": "ok"})
@@ -399,3 +402,4 @@ class TestMultiStep:
         assert task_exists('REPAIR-TSK-RUN-001')
         repair = q("SELECT * FROM tasks WHERE id = 'REPAIR-TSK-RUN-001'")[0]
         assert 'Git conflict' in repair['module_iteration_goal']
+

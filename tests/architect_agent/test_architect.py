@@ -2,13 +2,13 @@ import pytest
 import os
 import shutil
 
-from smart_task_app.agents.architect.agent import root_agent, write_module_design_doc
+from experts.task_planner.agent import root_agent, write_module_design_doc
 
 def test_architect_agent_loads():
     """Verify the architect agent definition is grammatically correct and loads tools."""
-    assert root_agent.name == "architect"
+    assert root_agent.name == "task_planner"
     assert root_agent.model == "gemini-2.5-flash"
-    assert len(root_agent.tools) == 3
+    assert len(root_agent.tools) == 2
 
 def test_tool_write_module_design_doc():
     """Test the side-effect output logic of the doc tool without performing actual git commits."""

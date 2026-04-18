@@ -31,13 +31,13 @@ DELETE FROM resources;
 -- ═══════════════════════════════════════════════════════════════
 --  1. RESOURCES (Agent Slots)
 -- ═══════════════════════════════════════════════════════════════
---  PM slot:      RES-PM-001       — Control Plane / Activity Manager
+--  PM slot:      RES-ARCHITECT-001 — Control Plane / Activity Manager
 --  Coder slots:  RES-CODER-001    — Available (will receive dispatched tasks)
 --                RES-CODER-002    — Busy (has in_progress task)
 --                RES-CODER-003    — Available (idle, no tasks)
 
 INSERT INTO resources (id, name, org_role, workspace_path, is_available, resource_type) VALUES
-('RES-PM-001',    'Project Manager',  'Control Plane',  '/app',       TRUE,  'activity_manager'),
+('RES-ARCHITECT-001', 'Project Manager',  'Control Plane',  '/app',       TRUE,  'activity_manager'),
 ('RES-CODER-001', 'Coder Alpha',      'Coder',          '/work/c1',   TRUE,  'agent'),
 ('RES-CODER-002', 'Coder Beta',       'Coder',          '/work/c2',   FALSE, 'agent'),
 ('RES-CODER-003', 'Coder Gamma',      'Coder',          '/work/c3',   TRUE,  'agent');
@@ -48,7 +48,7 @@ INSERT INTO resources (id, name, org_role, workspace_path, is_available, resourc
 -- ═══════════════════════════════════════════════════════════════
 
 INSERT INTO projects (id, name, initiator_res_id, memo_content, status) VALUES
-('PRJ-TEST-001', 'Test Project: Trading Platform', 'RES-PM-001', 
+('PRJ-TEST-001', 'Test Project: Trading Platform', 'RES-ARCHITECT-001', 
  'Build a modular trading platform with auth, API, and data pipeline.', 'Active');
 
 
@@ -59,8 +59,8 @@ INSERT INTO projects (id, name, initiator_res_id, memo_content, status) VALUES
 --  ACT-STALL-001 — All tasks terminal → should trigger activity_stalled event
 
 INSERT INTO activities (id, name, project_id, owner_res_id, status, priority, user_instruction, instruction_version) VALUES
-('ACT-LIVE-001',  'Sprint: Core Auth & API',     'PRJ-TEST-001', 'RES-PM-001', 'Active', 'P0', NULL, 0),
-('ACT-STALL-001', 'Sprint: Legacy Data Migration','PRJ-TEST-001', 'RES-PM-001', 'Active', 'P1', NULL, 0);
+('ACT-LIVE-001',  'Sprint: Core Auth & API',     'PRJ-TEST-001', 'RES-ARCHITECT-001', 'Active', 'P0', NULL, 0),
+('ACT-STALL-001', 'Sprint: Legacy Data Migration','PRJ-TEST-001', 'RES-ARCHITECT-001', 'Active', 'P1', NULL, 0);
 
 
 -- ═══════════════════════════════════════════════════════════════
@@ -124,9 +124,9 @@ INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id,
  'Add role-based access control layer', 4.0, 'pending', '{TSK-PEND-001}',
  TRUE, NULL, NULL),
 
--- Ready: will be dispatched to RES-CODER-003 (available)
+-- Pending (originally ready): will be promoted then dispatched
 ('TSK-READY-001', 'PRJ-TEST-001', 'ACT-LIVE-001', 'MOD-API-001', 'RES-CODER-003',
- 'Build health check and monitoring endpoints', 1.0, 'ready', '{}',
+ 'Build health check and monitoring endpoints', 1.0, 'pending', '{}',
  TRUE, NULL, NULL),
 
 -- In Progress: occupies RES-CODER-002 (busy)
@@ -173,7 +173,7 @@ INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id,
 --  6. SYSTEM STATE
 -- ═══════════════════════════════════════════════════════════════
 
-INSERT INTO system_state (key, value) VALUES ('run_mode', '"auto"');
+INSERT INTO system_state (key, value) VALUES ('run_mode', '"pause"');
 INSERT INTO system_state (key, value) VALUES ('step_count', '0');
 
 

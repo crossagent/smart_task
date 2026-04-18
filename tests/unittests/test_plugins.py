@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock
-from smart_task_app.shared_libraries.plugins import MaxTurnsPlugin
+from shared.plugins import MaxTurnsPlugin
 from google.adk.models.llm_response import LlmResponse
 from google.genai import types
 
