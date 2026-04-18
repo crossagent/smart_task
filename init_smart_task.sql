@@ -7,6 +7,7 @@
 -- \c smart_task_hub
 
 -- 1. DROP EXISTING TABLES (Reverse FK order)
+DROP TABLE IF EXISTS system_state CASCADE;
 DROP TABLE IF EXISTS activity_collaborators CASCADE;
 DROP TABLE IF EXISTS tasks CASCADE;
 DROP TABLE IF EXISTS modules CASCADE;
@@ -39,6 +40,8 @@ CREATE TABLE IF NOT EXISTS resources (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+INSERT INTO resources (id, name, org_role, workspace_path, is_available, resource_type) 
+VALUES ('RES-ARCHITECT-001', 'System Architect', 'Control Plane', '/app', True, 'activity_manager');
 COMMENT ON TABLE resources IS 'Bandwidth / Personnel / 执行人 / Agent Slot';
 COMMENT ON COLUMN resources.id IS 'RES-YYYYMMDD-XXXX';
 COMMENT ON COLUMN resources.status IS 'Available | Busy | Away | Archived';
@@ -73,6 +76,8 @@ CREATE TABLE IF NOT EXISTS activities (
     benefit TEXT,
     priority VARCHAR(10) DEFAULT 'P1',
     artifact_url TEXT DEFAULT NULL,
+    user_instruction TEXT DEFAULT NULL,
+    instruction_version INT DEFAULT 0,
     status VARCHAR(50) DEFAULT 'Active',
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -113,6 +118,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     estimated_hours DECIMAL(10,2) DEFAULT NULL,
     execution_result TEXT DEFAULT NULL,
     status VARCHAR(50) DEFAULT 'pending',
+    is_approved BOOLEAN DEFAULT TRUE,
     depends_on VARCHAR(50)[] DEFAULT '{}',
     start_date DATE DEFAULT NULL,
     due_date DATE DEFAULT NULL,
@@ -172,6 +178,18 @@ CREATE TABLE IF NOT EXISTS activity_collaborators (
     UNIQUE(activity_id, resource_id)
 );
 COMMENT ON TABLE activity_collaborators IS 'Activity Access Control (who can manage Tasks under this Activity)';
+
+-- 8.5 System State Table - '控制总线状态' (Control Plane State)
+CREATE TABLE IF NOT EXISTS system_state (
+    key VARCHAR(255) PRIMARY KEY,
+    value JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+COMMENT ON TABLE system_state IS 'Global control state (run_mode, step_count, etc.)';
+
+INSERT INTO system_state (key, value) VALUES ('run_mode', '"auto"');
+INSERT INTO system_state (key, value) VALUES ('step_count', '0');
 
 -- 9. Apply Triggers for `updated_at` functionality
 DROP TRIGGER IF EXISTS update_resources_modtime ON resources;

@@ -1,89 +1,123 @@
 import pytest
 import respx
 import httpx
-from unittest.mock import MagicMock, patch
-# Import the actual core cycle - tests might have been using an older name
+from unittest.mock import MagicMock, patch, ANY
+# Import the actual core cycle
 from src.task_execution.scheduler import run_system_bus_cycle as run_scheduler_tick
 from src.resource_management.supervisor import agent_supervisor
+from src.task_management.db import execute_query, execute_mutation
 
-@pytest.fixture
-def mock_db():
-    with patch("src.task_execution.scheduler.execute_query") as m_query, \
-         patch("src.task_execution.scheduler.execute_mutation") as m_mutate:
-        yield m_query, m_mutate
+@pytest.fixture(autouse=True)
+def db_setup_cleanup(db_conn):
+    """Ensure the database is clean before and after tests."""
+    # 1. Clean up potential leftover data
+    execute_mutation("DELETE FROM system_state")
+    execute_mutation("DELETE FROM tasks")
+    execute_mutation("DELETE FROM modules")
+    execute_mutation("DELETE FROM activities")
+    execute_mutation("DELETE FROM projects")
+    execute_mutation("DELETE FROM resources")
+    
+    # 2. Seed system state
+    execute_mutation("INSERT INTO system_state (key, value) VALUES ('run_mode', '\"auto\"')")
+    execute_mutation("INSERT INTO system_state (key, value) VALUES ('step_count', '0')")
+    
+    yield
+    
+    # 3. Cleanup after test
+    execute_mutation("DELETE FROM system_state")
+    execute_mutation("DELETE FROM tasks")
+    execute_mutation("DELETE FROM modules")
+    execute_mutation("DELETE FROM activities")
+    execute_mutation("DELETE FROM projects")
+    execute_mutation("DELETE FROM resources")
 
 @respx.mock
-def test_full_pool_dispatch_and_reconcile(mock_db):
-    m_query, m_mutate = mock_db
+def test_full_pool_dispatch_and_reconcile():
+    """
+    INTEGRATION TEST: Verifies the full scheduler bus cycle using a REAL database.
+    Flow: Ready Task -> Dispatch -> Busy Resource -> Task Done -> Reconcile -> Available Resource.
+    """
     
-    # 1. Setup states
+    # 1. SEED DATA into Real Database
+    # -----------------------------
+    # Create Resource
+    execute_mutation("""
+        INSERT INTO resources (id, name, org_role, workspace_path, is_available)
+        VALUES ('R1', 'Test Agent R1', 'Coder', '/work/w1', True),
+               ('RES-ARCHITECT-001', 'System Architect', 'Control Plane', '/app', True)
+    """)
+    
+    # Create Project
+    execute_mutation("""
+        INSERT INTO projects (id, name, initiator_res_id, memo_content)
+        VALUES ('P1', 'Test Project', 'R1', 'Test Memo')
+    """)
+    
+    # Create Activity
+    execute_mutation("""
+        INSERT INTO activities (id, name, project_id, owner_res_id)
+        VALUES ('A1', 'Test Activity', 'P1', 'R1')
+    """)
+    
+    # Create Module
+    execute_mutation("""
+        INSERT INTO modules (id, name, owner_res_id)
+        VALUES ('M1', 'Test Module', 'R1')
+    """)
+    
+    # Create Task (Ready for dispatch)
+    execute_mutation("""
+        INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, module_iteration_goal, status)
+        VALUES ('T1', 'P1', 'A1', 'M1', 'R1', 'Build a feature', 'ready')
+    """)
+
+    # 2. Configure Agent Supervisor Pool
+    # ---------------------------------
     agent_supervisor.pool = {
-        "R1": MagicMock(url="http://agent-r1:9001")
+        "R1": {"url": "http://agent-r1:9001", "agent_id": "r1-agent"}
     }
 
-    # First tick: Promotion + Dispatch
-    # Mock data return for Tick 1
-    m_query.side_effect = [
-        [], # Promote pending (none)
-        [   # System state
-            {'key': 'run_mode', 'value': 'auto'},
-            {'key': 'step_count', 'value': '0'}
-        ],
-        [], # Promote pending (dependencies)
-        [   # Ready tasks for dispatch
-            {
-                'task_id': 'T1', 
-                'res_id': 'R1', 
-                'workspace_path': '/work/w1',
-                'module_iteration_goal': 'Build a feature'
-            }
-        ]
-    ]
-
-    # Mock the Agent API endpoint
+    # 3. Mock Agent Network IO
+    # -----------------------
+    # Mock Session Init
+    session_route = respx.post("http://agent-r1:9001/apps/r1-agent/users/smart-task-scheduler/sessions").respond(201, json={"status": "created"})
+    # Mock /run endpoint
     agent_route = respx.post("http://agent-r1:9001/run").respond(200, json={"status": "accepted"})
     
-    # Mock threading.Thread to run target synchronously for testing
+    # 4. First tick: Dispatch Logic
+    # ----------------------------
+    # Mock threading.Thread to run target synchronously for deterministic testing
     with patch("src.task_execution.scheduler.threading.Thread") as mock_thread:
-        # Create a mock thread instance that calls target immediately
         def sync_run(target, args=(), kwargs={}, daemon=True):
             target(*args, **kwargs)
-            return MagicMock() # Return a mock handle
-        
+            return MagicMock()
         mock_thread.side_effect = sync_run
         
-        # Run Tick 1 (Dispatch)
+        # ACT: First Cycle
         run_scheduler_tick()
     
-    # Verify Dispatch
-    m_mutate.assert_any_call("UPDATE resources SET is_available = False WHERE id = %s", ("R1",), connection=pytest.any)
-    m_mutate.assert_any_call("UPDATE tasks SET status = 'in_progress' WHERE id = %s", ("T1",), connection=pytest.any)
+    # VERIFY: Database state after dispatch
+    task_res = execute_query("SELECT status FROM tasks WHERE id = 'T1'")
+    assert task_res[0]['status'] == 'in_progress'
     
-    # Verify HTTP call was made
+    res_res = execute_query("SELECT is_available FROM resources WHERE id = 'R1'")
+    assert res_res[0]['is_available'] is False
+    
+    # VERIFY: Network calls
+    assert session_route.called
     assert agent_route.called
     
-    # Second tick: Reconciliation
-    # Now simulate that T1 is finished (status='code_done' in DB)
-    m_query.side_effect = [
-        [], # Interrupts
-        [], # Human interventions
-        [   # System state
-            {'key': 'run_mode', 'value': 'auto'},
-            {'key': 'step_count', 'value': '0'}
-        ],
-        [], # Promote
-        [], # Dispatch
-        [   # Reconciliation: find one task that is done but resource is busy
-            {
-                'id': 'T1',
-                'resource_id': 'R1',
-                'workspace_path': '/work/w1'
-            }
-        ]
-    ]
+    # 5. Second tick: Reconciliation Logic
+    # ----------------------------------
+    # SIMULATE: Task finishes (e.g. by agent updating DB)
+    execute_mutation("UPDATE tasks SET status = 'code_done' WHERE id = 'T1'")
     
-    # Run Tick 2 (Reconcile)
+    # ACT: Second Cycle
     run_scheduler_tick()
     
-    # Verify Cleanup
-    m_mutate.assert_any_call("UPDATE resources SET is_available = True WHERE id = %s", ("R1",), connection=pytest.any)
+    # VERIFY: Database state after reconciliation
+    res_reconciled = execute_query("SELECT is_available FROM resources WHERE id = 'R1'")
+    assert res_reconciled[0]['is_available'] is True
+    
+    print(">>> Integration test test_full_pool_dispatch_and_reconcile PASSED on REAL DB.")

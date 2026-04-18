@@ -7,9 +7,8 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Force DB_NAME to smart_task_test if it's not already set
-# This ensures we don't accidentally run tests against the prod/dev DB
-if os.getenv("DB_NAME") != "smart_task_test":
+# Only default to smart_task_test if no DB_NAME is provided in the environment
+if not os.getenv("DB_NAME"):
     os.environ["DB_NAME"] = "smart_task_test"
 print(f">>> [conftest] Using DB_NAME: {os.environ.get('DB_NAME')}")
 

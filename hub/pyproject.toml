@@ -1,0 +1,13 @@
+[project]
+name = "hub"
+version = "0.1.0"
+description = "Project Manager Agent for Smart Task Hub"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "google-adk>=1.0.0",
+]
+
+[tool.uv]
+managed = true
+package = false
