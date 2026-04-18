@@ -420,10 +420,10 @@ def get_activity_schedule_report(activity_id: str) -> str:
         tasks = execute_query(tasks_query, (activity_id,))
 
         status_emoji = {
-            'pending': '⏳',
+            'pending': '�?,
             'ready': '🔵',
             'in_progress': '🔄',
-            'code_done': '🧑‍💻',
+            'code_done': '🧑‍�?,
             'done': '🟢',
             'failed': '🔴',
             'blocked': '🚫',
@@ -448,7 +448,7 @@ def get_activity_schedule_report(activity_id: str) -> str:
         for mod_name, m_tasks in modules_dict.items():
             report.append(f"### 📦 Module: {mod_name}")
             for t in m_tasks:
-                emoji = status_emoji.get(t['status'], '❓')
+                emoji = status_emoji.get(t['status'], '�?)
                 hrs = f"{t['estimated_hours']}h" if t['estimated_hours'] else "N/A"
                 report.append(f"- {emoji} **[{t['status'].upper()}]** {t['module_iteration_goal']} (ID: `{t['id']}`, ETA: {hrs})")
                 if t['blocker_reason'] and t['status'] in ['failed', 'blocked', 'needs_human_help']:

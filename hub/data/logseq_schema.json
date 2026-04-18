@@ -4,7 +4,7 @@
   "modification_rule": "Always write from CHILD-BLOCK to PARENT-BLOCK or PAGE. Relationships are established via block-properties (double-brackets or parens).",
   "classes": {
     "Event": {
-      "role": "Inbox / Request View (Page/Block) - '备忘/事件表'",
+      "role": "Inbox / Request View (Page/Block) - '备忘/事件�?",
       "properties": {
         "class": "[[Event]]",
         "status": "[[Planning]] | [[Active]] | [[Done]]",
@@ -15,7 +15,7 @@
       }
     },
     "Feature": {
-      "role": "Execution Path / Strategy (Page/Block) - '业务特性'",
+      "role": "Execution Path / Strategy (Page/Block) - '业务特�?",
       "properties": {
         "class": "[[Feature]]",
         "event": "Ref to Event UUID: ((uuid))",
@@ -29,7 +29,7 @@
       "relational_logic": "Represents the implementation path as a collection of tasks and their dependencies."
     },
     "Task": {
-      "role": "Atomic Participant (Block) - '最小执行粒子'",
+      "role": "Atomic Participant (Block) - '最小执行粒�?",
       "properties": {
         "class": "[[Task]]",
         "event": "Ref to Event UUID: ((uuid))",
@@ -55,7 +55,7 @@
       }
     },
     "Resource": {
-      "role": "Bandwidth / Personnel (Page/Block) - '执行人'",
+      "role": "Bandwidth / Personnel (Page/Block) - '执行�?",
       "properties": {
         "class": "[[Resource]]",
         "weekly-capacity": "Number",

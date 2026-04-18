@@ -90,8 +90,7 @@ class AgentSupervisor:
         for handle in self.pool.values():
             self._start_agent_process(handle)
 
-        # 启动自愈和监控守护线程
-        self._watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True)
+        # 启动自愈和监控守护线�?        self._watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True)
         self._watchdog_thread.start()
 
     def _start_agent_process(self, handle: PersistentAgentHandle):
@@ -149,8 +148,7 @@ class AgentSupervisor:
         """Continuously monitors health and restarts failed agents."""
         while not self._stop_event.is_set():
             self._reconcile_pool()
-            # 每 10 秒检查一次
-            time.sleep(10)
+            # �?10 秒检查一�?            time.sleep(10)
 
     def _reconcile_pool(self):
         """Internal logic to check health and trigger restarts."""

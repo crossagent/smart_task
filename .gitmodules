@@ -1,22 +1,21 @@
-[submodule "smart_task_app/shared_libraries"]
-	path = smart_task_app/shared_libraries
+[submodule "shared"]
+	path = shared
 	url = https://github.com/crossagent/smart-task-common.git
-[submodule "smart_task_app/agents/activity_manager"]
-	path = smart_task_app/agents/activity_manager
+[submodule "experts/task_planner"]
+	path = experts/task_planner
 	url = https://github.com/crossagent/smart-agent-activity-manager.git
-[submodule "smart_task_app/agents/data_engineer"]
-	path = smart_task_app/agents/data_engineer
+[submodule "experts/data_expert"]
+	path = experts/data_expert
 	url = https://github.com/crossagent/smart-agent-data-engineer.git
-[submodule "smart_task_app/agents/execution_trader"]
-	path = smart_task_app/agents/execution_trader
+[submodule "experts/trader_expert"]
+	path = experts/trader_expert
 	url = https://github.com/crossagent/smart-agent-execution-trader.git
-[submodule "smart_task_app/agents/quant_developer"]
-	path = smart_task_app/agents/quant_developer
+[submodule "experts/coder_expert"]
+	path = experts/coder_expert
 	url = https://github.com/crossagent/smart-agent-quant-developer.git
-[submodule "smart_task_app/agents/quant_researcher"]
-	path = smart_task_app/agents/quant_researcher
+[submodule "experts/research_expert"]
+	path = experts/research_expert
 	url = https://github.com/crossagent/smart-agent-quant-researcher.git
-[submodule "smart_task_app/agents/risk_manager"]
-	path = smart_task_app/agents/risk_manager
+[submodule "experts/risk_expert"]
+	path = experts/risk_expert
 	url = https://github.com/crossagent/smart-agent-risk-manager.git
-

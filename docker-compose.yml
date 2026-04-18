@@ -15,7 +15,9 @@ services:
 
 
   task_planner:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     environment:
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
       - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-activity-manager.git
@@ -30,7 +32,9 @@ services:
       - db
 
   coder_expert:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     environment:
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
       - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-quant-developer.git
@@ -46,7 +50,9 @@ services:
       - db
 
   trader_expert:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     environment:
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
       - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-execution-trader.git
@@ -61,7 +67,9 @@ services:
       - db
 
   research_expert:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     environment:
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
       - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-quant-researcher.git
@@ -76,7 +84,9 @@ services:
       - db
 
   risk_expert:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     environment:
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
       - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-risk-manager.git
@@ -91,7 +101,9 @@ services:
       - db
 
   data_expert:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     environment:
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
       - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-data-engineer.git
@@ -107,7 +119,9 @@ services:
 
 
   hub_pm:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     environment:
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
       - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
