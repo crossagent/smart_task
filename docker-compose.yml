@@ -64,8 +64,9 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-activity-manager.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
+      - AGENT_NAME=activity_manager
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9011", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
     # REMOVED: local volume binds for 100% isolation
     depends_on:
@@ -89,8 +90,9 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-quant-developer.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
+      - AGENT_NAME=quant_developer
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9012", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
     ports:
       - "9012:9012"
@@ -112,8 +114,9 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-data-engineer.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
+      - AGENT_NAME=data_engineer
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9013", "--host", "0.0.0.0"]
     ports:
       - "9013:9013"
@@ -135,8 +138,9 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-quant-researcher.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
+      - AGENT_NAME=quant_researcher
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9014", "--host", "0.0.0.0"]
     ports:
       - "9014:9014"
@@ -158,8 +162,9 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-risk-manager.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
+      - AGENT_NAME=risk_manager
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9015", "--host", "0.0.0.0"]
     ports:
       - "9015:9015"
@@ -181,8 +186,9 @@ services:
       - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
       - AGENT_BASE_PATH=/app
       - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-execution-trader.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
+      - AGENT_NAME=execution_trader
     command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9016", "--host", "0.0.0.0"]
     ports:
       - "9016:9016"
