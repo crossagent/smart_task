@@ -448,7 +448,7 @@ def get_activity_schedule_report(activity_id: str) -> str:
         for mod_name, m_tasks in modules_dict.items():
             report.append(f"### 馃摝 Module: {mod_name}")
             for t in m_tasks:
-                emoji = status_emoji.get(t['status'], '鉂?)
+                emoji = status_emoji.get(t['status'], '❓')
                 hrs = f"{t['estimated_hours']}h" if t['estimated_hours'] else "N/A"
                 report.append(f"- {emoji} **[{t['status'].upper()}]** {t['module_iteration_goal']} (ID: `{t['id']}`, ETA: {hrs})")
                 if t['blocker_reason'] and t['status'] in ['failed', 'blocked', 'needs_human_help']:
