@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import mermaid from 'mermaid'
 import { RefreshCcw, Info, CheckCircle, XCircle, Search, FileText, Play, Pause, FastForward, Send, Radio } from 'lucide-react'
+import EventTimeline from './EventTimeline'
 
 // Initialize Mermaid
 mermaid.initialize({
@@ -74,22 +75,8 @@ function BlueprintGraph({ activityId }) {
     // Generate Mermaid Syntax
     let code = "graph TD\n"
     
-    // Separate DAG nodes from Control Plane (Interrupt) nodes
-    const dagNodes = graphData.nodes.filter(n => !n.id.startsWith('INT-EVT-'))
-    const interruptNodes = graphData.nodes.filter(n => n.id.startsWith('INT-EVT-'))
-
-    if (interruptNodes.length > 0) {
-      code += "  subgraph ControlBus [SYSTEM EVENT BUS / CONTROL PLANE]\n"
-      code += "    direction LR\n"
-      interruptNodes.forEach(node => {
-        const label = node.label.replace(/\n/g, "<br/>")
-        code += `    ${node.id}["${label}"]:::interrupt\n`
-      })
-      code += "  end\n\n"
-    }
-
-    // Define DAG Nodes with Styling
-    dagNodes.forEach(node => {
+    // All nodes rendered uniformly (events are in EventTimeline now, not in graph)
+    graphData.nodes.forEach(node => {
       let style = ""
       if (node.status === 'awaiting_approval') {
         style = ":::awaiting"
@@ -115,7 +102,6 @@ function BlueprintGraph({ activityId }) {
     code += `  classDef done fill:#10b981,stroke:#059669,stroke-width:1px,color:#fff\n`
     code += `  classDef ready fill:#3b82f6,stroke:#2563eb,stroke-width:1px,color:#fff\n`
     code += `  classDef blocked fill:#ef4444,stroke:#dc2626,stroke-width:2px,color:#fff\n`
-    code += `  classDef interrupt fill:#d946ef,stroke:#a21caf,stroke-width:2px,color:#fff,stroke-dasharray: 5 5\n`
     
     try {
        // Unique ID for SVG generation to avoid collisions
@@ -246,6 +232,9 @@ function BlueprintGraph({ activityId }) {
       <div className="glass-panel min-h-[500px] flex items-center justify-center overflow-auto p-12">
         <div ref={mermaidRef} id="graphDiv" className="w-full flex justify-center" />
       </div>
+
+      {/* Event Timeline */}
+      <EventTimeline activityId={activityId} />
 
       {/* Side Detail Panel (Drawer) */}
       {selectedTask && (

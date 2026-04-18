@@ -142,16 +142,106 @@ async def set_system_control(mode: str = Query(None), step: int = Query(0)):
 
 @router.post("/activity/{activity_id}/instruction")
 async def update_activity_instruction(activity_id: str, instruction: str):
-    """Updates user instruction and bumps version and triggers PM."""
+    """Updates user instruction and bumps version and triggers PM via event."""
     sql = """
         UPDATE activities 
         SET user_instruction = %s, 
             instruction_version = instruction_version + 1,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = %s
+        RETURNING instruction_version
     """
     try:
-        execute_mutation(sql, (instruction, activity_id))
-        return {"status": "success"}
+        # Use execute_query to get the RETURNING value
+        result = execute_query(sql, (instruction, activity_id))
+        version = result[0]['instruction_version'] if result else 0
+        
+        # Emit event directly (human-initiated)
+        payload = json.dumps({'instruction': instruction, 'version': version})
+        execute_mutation("""
+            INSERT INTO events (event_type, source, severity, activity_id, payload)
+            VALUES ('human_instruction', 'human', 'critical', %s, %s)
+        """, (activity_id, payload))
+        
+        # Record version so scheduler doesn't double-detect
+        execute_mutation("""
+            INSERT INTO system_state (key, value) 
+            VALUES ('last_human_evt_' || %s, %s)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+        """, (activity_id, str(version)))
+        
+        return {"status": "success", "version": version}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- EVENT TIMELINE API ---
+
+@router.get("/events")
+async def get_events(
+    status: Optional[str] = Query(None, description="Filter by status: pending, processing, resolved, dismissed"),
+    activity_id: Optional[str] = Query(None, description="Filter by activity"),
+    limit: int = Query(50, description="Max results"),
+    offset: int = Query(0, description="Offset for pagination")
+):
+    """Returns the event timeline for the dashboard."""
+    sql = "SELECT * FROM events"
+    params = []
+    where_clauses = []
+
+    if status:
+        where_clauses.append("status = %s")
+        params.append(status)
+    if activity_id:
+        where_clauses.append("activity_id = %s")
+        params.append(activity_id)
+    
+    if where_clauses:
+        sql += " WHERE " + " AND ".join(where_clauses)
+    
+    sql += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+    params.extend([limit, offset])
+    
+    try:
+        results = execute_query(sql, tuple(params))
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/events")
+async def create_event(
+    event_type: str,
+    severity: str = Query("normal"),
+    activity_id: Optional[str] = Query(None),
+    task_id: Optional[str] = Query(None),
+    payload: str = Query("{}")
+):
+    """Human-initiated event creation from the dashboard."""
+    try:
+        execute_mutation("""
+            INSERT INTO events (event_type, source, severity, activity_id, task_id, payload)
+            VALUES (%s, 'human', %s, %s, %s, %s)
+        """, (event_type, severity, activity_id, task_id, payload))
+        return {"status": "success", "message": f"Event '{event_type}' created."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/events/{event_id}/dismiss")
+async def dismiss_event(event_id: int):
+    """Dismiss (ignore) a pending event."""
+    try:
+        count = execute_mutation("""
+            UPDATE events 
+            SET status = 'dismissed', resolved_by = 'human', resolved_at = CURRENT_TIMESTAMP 
+            WHERE id = %s AND status = 'pending'
+        """, (event_id,))
+        if count == 0:
+            raise HTTPException(status_code=404, detail="Event not found or already processed")
+        return {"status": "success", "message": f"Event #{event_id} dismissed."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

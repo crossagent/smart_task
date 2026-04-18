@@ -1,4 +1,4 @@
-﻿import json
+import json
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 from .db import execute_query, execute_mutation, CustomEncoder
@@ -384,12 +384,21 @@ def report_blocker(task_id: str, reason: str) -> str:
     """
     Report a blocker or failure for a task. 
     Use this tool when encountering API failures, deadlocks, or unresolvable dependencies.
-    It marks the task as 'failed' and logs the blocker reason for the human to review.
+    It marks the task as 'failed', logs the blocker reason, and emits a system event.
     """
     sql = "UPDATE tasks SET status = 'failed', blocker_reason = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s"
     try:
         execute_mutation(sql, (reason, task_id))
-        return f"Successfully reported blocker for task {task_id}. The system has registered the issue."
+        # Also emit an event so the scheduler picks it up
+        ctx = execute_query("SELECT activity_id FROM tasks WHERE id = %s", (task_id,))
+        act_id = ctx[0]['activity_id'] if ctx else None
+        payload = json.dumps({'reason': reason, 'original_status': 'failed'})
+        execute_mutation("""
+            INSERT INTO events (event_type, source, severity, activity_id, task_id, payload)
+            VALUES ('task_failed', 'agent', 'warning', %s, %s, %s)
+            ON CONFLICT DO NOTHING
+        """, (act_id, task_id, payload))
+        return f"Successfully reported blocker for task {task_id}. A system event has been emitted."
     except Exception as e:
         return f"Error reporting blocker: {str(e)}"
 
@@ -459,6 +468,62 @@ def get_activity_schedule_report(activity_id: str) -> str:
     except Exception as e:
         return f"Error generating schedule report: {str(e)}"
 
+def emit_event(
+    event_type: str,
+    source: str,
+    severity: str = "normal",
+    activity_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    payload: Optional[str] = None
+) -> str:
+    """
+    Emit a system event to the Event Bus.
+    Events are consumed by the scheduler and translated into Task mutations.
+    
+    Common event_types: task_blocked, task_failed, human_instruction, activity_stalled, agent_timeout, custom.
+    source: who is emitting (e.g. 'human', 'agent:RES-XXX', 'scheduler').
+    severity: 'normal' | 'warning' | 'critical'.
+    payload: JSON string with event-specific data.
+    """
+    sql = """
+        INSERT INTO events (event_type, source, severity, activity_id, task_id, resource_id, payload)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT DO NOTHING
+    """
+    try:
+        payload_str = payload or '{}'
+        execute_mutation(sql, (event_type, source, severity, activity_id, task_id, resource_id, payload_str))
+        return f"Event '{event_type}' emitted successfully (source: {source}, severity: {severity})."
+    except Exception as e:
+        return f"Error emitting event: {str(e)}"
+
+def list_pending_events() -> str:
+    """
+    List all pending (unprocessed) system events, ordered by severity then time.
+    Use this to understand what signals are waiting to be acted upon.
+    """
+    query = """
+        SELECT id, event_type, source, severity, activity_id, task_id, 
+               payload, status, created_at
+        FROM events 
+        WHERE status = 'pending'
+        ORDER BY 
+            CASE severity 
+                WHEN 'critical' THEN 0 
+                WHEN 'warning' THEN 1 
+                ELSE 2 
+            END,
+            created_at ASC
+    """
+    try:
+        results = execute_query(query)
+        if not results:
+            return "No pending events in the system."
+        return json.dumps(results, indent=2, cls=CustomEncoder, ensure_ascii=False)
+    except Exception as e:
+        return f"Error listing events: {str(e)}"
+
 def register_tools(mcp: FastMCP):
     """Registers all CRUD database tools to the FastMCP server."""
     mcp.tool()(query_sql)
@@ -477,3 +542,5 @@ def register_tools(mcp: FastMCP):
     mcp.tool()(list_tasks_for_review)
     mcp.tool()(approve_task)
     mcp.tool()(reject_task)
+    mcp.tool()(emit_event)
+    mcp.tool()(list_pending_events)

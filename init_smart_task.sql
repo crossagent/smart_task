@@ -191,7 +191,45 @@ COMMENT ON TABLE system_state IS 'Global control state (run_mode, step_count, et
 INSERT INTO system_state (key, value) VALUES ('run_mode', '"auto"');
 INSERT INTO system_state (key, value) VALUES ('step_count', '0');
 
--- 9. Apply Triggers for `updated_at` functionality
+-- 9. Events Table - '系统事件/中断信号' (System Event Bus)
+CREATE TABLE IF NOT EXISTS events (
+    id          SERIAL PRIMARY KEY,
+    event_type  VARCHAR(50) NOT NULL,          -- task_blocked | task_failed | human_instruction | activity_stalled | ...
+    source      VARCHAR(100) NOT NULL,         -- scheduler | human | agent:<resource_id>
+    severity    VARCHAR(10) DEFAULT 'normal',  -- normal | warning | critical
+
+    -- Associated context (all optional, depends on event_type)
+    activity_id VARCHAR(50) DEFAULT NULL REFERENCES activities(id),
+    task_id     VARCHAR(50) DEFAULT NULL,      -- No FK: event may reference tasks that don't exist yet
+    resource_id VARCHAR(50) DEFAULT NULL REFERENCES resources(id),
+
+    -- Event payload
+    payload     JSONB NOT NULL DEFAULT '{}',   -- Flexible event data
+
+    -- Lifecycle
+    status      VARCHAR(20) DEFAULT 'pending', -- pending | processing | resolved | dismissed
+    resolved_by VARCHAR(100) DEFAULT NULL,     -- Who/what resolved this event (task_id or human)
+
+    created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMPTZ DEFAULT NULL
+);
+
+-- Efficient query for pending events (the hot path in every bus cycle)
+CREATE INDEX idx_events_pending ON events (status, severity, created_at)
+    WHERE status = 'pending';
+
+-- Deduplication: prevent duplicate pending events for the same task
+CREATE UNIQUE INDEX idx_events_dedup ON events (event_type, task_id)
+    WHERE status = 'pending' AND task_id IS NOT NULL;
+
+COMMENT ON TABLE events IS 'System Event Bus / 系统事件信号表 - Signals that trigger Task mutations';
+COMMENT ON COLUMN events.event_type IS 'Event category: task_blocked | task_failed | human_instruction | activity_stalled | agent_timeout | custom';
+COMMENT ON COLUMN events.source IS 'Origin: scheduler | human | agent:<resource_id>';
+COMMENT ON COLUMN events.severity IS 'Priority: normal | warning | critical';
+COMMENT ON COLUMN events.status IS 'Lifecycle: pending | processing | resolved | dismissed';
+COMMENT ON COLUMN events.resolved_by IS 'The task_id or actor that handled this event';
+
+-- 10. Apply Triggers for `updated_at` functionality
 DROP TRIGGER IF EXISTS update_resources_modtime ON resources;
 CREATE TRIGGER update_resources_modtime BEFORE UPDATE ON resources FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 

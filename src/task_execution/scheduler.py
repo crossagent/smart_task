@@ -1,41 +1,196 @@
 from __future__ import annotations
 
 import time
+import json
 import os
 import logging
 import httpx
 import threading
+from typing import Optional
 from src.task_management.db import execute_query, execute_mutation, db_transaction
 from src.resource_management.supervisor import agent_supervisor
 
 logger = logging.getLogger("smart_task.task_execution.scheduler")
 
+
+# ═══════════════════════════════════════════════════════════════
+#  EVENT HANDLER REGISTRY
+#  Each handler receives (event_row, connection) and returns
+#  the task_id that will resolve this event (or None).
+# ═══════════════════════════════════════════════════════════════
+
+def _handle_task_anomaly(event, conn):
+    """Handle task_blocked / task_failed events by creating a PM repair task."""
+    task_id = event['task_id']
+    act_id = event['activity_id']
+    payload = event['payload'] if isinstance(event['payload'], dict) else json.loads(event['payload'])
+    reason = payload.get('reason', 'Unknown failure')
+    status = payload.get('original_status', 'failed')
+
+    # Find context for the repair task
+    ctx = execute_query(
+        "SELECT project_id, module_id FROM tasks WHERE id = %s", (task_id,),
+        connection=conn
+    )
+    if not ctx:
+        logger.warning(f"Event {event['id']}: Referenced task {task_id} not found. Dismissing.")
+        return None
+
+    proj_id = ctx[0]['project_id']
+    mod_id = ctx[0]['module_id']
+
+    # Generate a unique repair task ID
+    repair_task_id = f"REPAIR-{task_id}"
+    
+    goal = (f"INTERRUPT SIGNAL: Agent execution anomaly at node {task_id}.\n"
+            f"Reason: {reason}\n"
+            f"Status: {status}\n\n"
+            "Your mission: As the Control Plane, analyze the activity state, diagnose why this node failed, "
+            "and use your DAG mutation tools to heal the system (e.g. rewrite task, split task, or reset state).")
+
+    sql = """
+        INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, 
+                           module_iteration_goal, estimated_hours, status)
+        VALUES (%s, %s, %s, %s, 'RES-ARCHITECT-001', %s, 0.5, 'ready')
+        ON CONFLICT (id) DO NOTHING
+    """
+    execute_mutation(sql, (repair_task_id, proj_id, act_id, mod_id, goal), connection=conn)
+    logger.info(f"Event {event['id']} → Created repair task {repair_task_id}")
+    return repair_task_id
+
+
+def _handle_human_instruction(event, conn):
+    """Handle human_instruction events by creating a PM re-evaluation task."""
+    act_id = event['activity_id']
+    payload = event['payload'] if isinstance(event['payload'], dict) else json.loads(event['payload'])
+    instruction = payload.get('instruction', 'No specific instruction provided.')
+    version = payload.get('version', 0)
+
+    # Find context
+    ctx = execute_query(
+        "SELECT project_id FROM activities WHERE id = %s", (act_id,),
+        connection=conn
+    )
+    if not ctx:
+        logger.warning(f"Event {event['id']}: Activity {act_id} not found. Dismissing.")
+        return None
+
+    proj_id = ctx[0]['project_id']
+    cmd_task_id = f"CMD-{act_id}-V{version}"
+
+    # Find a module_id from existing tasks in this activity
+    mod_ctx = execute_query(
+        "SELECT module_id FROM tasks WHERE activity_id = %s LIMIT 1", (act_id,),
+        connection=conn
+    )
+    if not mod_ctx:
+        logger.warning(f"Event {event['id']}: No tasks found for activity {act_id}. Dismissing.")
+        return None
+
+    mod_id = mod_ctx[0]['module_id']
+
+    goal = (f"HUMAN COMMAND RECEIVED (Version {version}):\n\n"
+            f"\"{instruction}\"\n\n"
+            "As the Control Plane, you must now re-evaluate your current DAG plan. "
+            "Use your tools to adjust task goals, add new nodes, or reset states to satisfy the user's new requirements.")
+
+    sql = """
+        INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, 
+                           module_iteration_goal, estimated_hours, status)
+        VALUES (%s, %s, %s, %s, 'RES-ARCHITECT-001', %s, 0.5, 'ready')
+        ON CONFLICT (id) DO NOTHING
+    """
+    execute_mutation(sql, (cmd_task_id, proj_id, act_id, mod_id, goal), connection=conn)
+    logger.info(f"Event {event['id']} → Created command task {cmd_task_id}")
+    return cmd_task_id
+
+
+def _handle_activity_stalled(event, conn):
+    """Handle activity_stalled events by creating a review task for the PM."""
+    act_id = event['activity_id']
+    payload = event['payload'] if isinstance(event['payload'], dict) else json.loads(event['payload'])
+    completed = payload.get('completed', 0)
+    total = payload.get('total', 0)
+    issues = payload.get('issues', 0)
+
+    ctx = execute_query(
+        "SELECT project_id FROM activities WHERE id = %s", (act_id,),
+        connection=conn
+    )
+    if not ctx:
+        return None
+
+    proj_id = ctx[0]['project_id']
+    rev_task_id = f"REV-{act_id}"
+
+    # Find root module
+    mod_ctx = execute_query("""
+        SELECT m.id FROM tasks t
+        JOIN modules m ON t.module_id = m.id AND m.parent_module_id IS NULL
+        WHERE t.activity_id = %s LIMIT 1
+    """, (act_id,), connection=conn)
+    if not mod_ctx:
+        return None
+
+    mod_id = mod_ctx[0]['id']
+
+    goal = (f"Review Activity {act_id}. All subtasks are terminal. "
+            f"Completed: {completed}/{total}. Issues: {issues}. "
+            "Analyze the execution results and either officially close the Activity or break down new tasks to fix issues.")
+
+    sql = """
+        INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, 
+                           module_iteration_goal, estimated_hours, status)
+        VALUES (%s, %s, %s, %s, 'RES-ARCHITECT-001', %s, 1.0, 'ready')
+        ON CONFLICT (id) DO NOTHING
+    """
+    execute_mutation(sql, (rev_task_id, proj_id, act_id, mod_id, goal), connection=conn)
+    logger.info(f"Event {event['id']} → Created review task {rev_task_id}")
+    return rev_task_id
+
+
+# Handler routing table
+EVENT_HANDLERS = {
+    'task_blocked':        _handle_task_anomaly,
+    'task_failed':         _handle_task_anomaly,
+    'human_instruction':   _handle_human_instruction,
+    'activity_stalled':    _handle_activity_stalled,
+}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  CORE BUS CYCLE
+# ═══════════════════════════════════════════════════════════════
+
 def run_system_bus_cycle():
     """
-    Core System Control Bus Cycle.
-    Follows: [Priority 0: Interrupts] -> [Priority 1: DAG Data Plane] -> [Priority 2: Reconcile]
+    Core System Control Bus Cycle (Event-Driven).
+    
+    Phase 1: DETECT   — Scan for anomalies, write events
+    Phase 2: CONSUME  — Read pending events, route to handlers → Task mutations
+    Phase 3: EXECUTE  — Promote & Dispatch tasks (gated by run_mode)
+    Phase 4: RECONCILE — Release completed task resources
     """
     try:
         with db_transaction() as conn:
-            # 1. PRIORITY 0: Monitor systems for anomalies
-            _watch_for_interrupts(connection=conn)
-            
-            # 1.1 Monitor for Human Interventions (Manual Goal Changes)
-            _watch_for_human_interventions(connection=conn)
+            # ═══ Phase 1: EVENT DETECTION (Sensors) ═══
+            _detect_task_anomalies(connection=conn)
+            _detect_human_interventions(connection=conn)
+            _detect_stalled_activities(connection=conn)
 
-            # 2. PRIORITY 1: Control Gate (Pause/Step Logic)
-            # Fetch global system state
+            # ═══ Phase 2: EVENT CONSUMPTION (Control Plane) ═══
+            _process_pending_events(connection=conn)
+
+            # ═══ Phase 3: CONTROL GATE + DATA PLANE ═══
             state_data = execute_query("SELECT key, value FROM system_state", connection=conn)
             state = {row['key']: row['value'] for row in state_data}
             
             run_mode = state.get('run_mode', "auto")
-            # JSONB strings might have extra quotes or be plain
             if isinstance(run_mode, str):
                 run_mode = run_mode.strip('"') 
             
             step_count = int(state.get('step_count', 0))
 
-            # Decide whether to run execution logic
             if run_mode == "pause" and step_count <= 0:
                 logger.debug("System Bus Cycle: GATED/PAUSED. Skipping execution logic.")
             else:
@@ -43,71 +198,177 @@ def run_system_bus_cycle():
                     logger.info(f"System Bus Cycle: STEP mode ({step_count} remaining). Executing...")
                     execute_mutation("UPDATE system_state SET value = %s WHERE key = 'step_count'", (str(step_count - 1),), connection=conn)
 
-                # 3. PRIORITY 1: Data Plane flow
-                # Promote pending tasks to ready if dependencies are met
+                # Data Plane flow
                 _promote_pending_tasks(connection=conn)
-                
-                # Dispatch ready tasks to persistent agent pool (Execution start)
                 _dispatch_ready_tasks(connection=conn)
 
-            # Reconcile completed tasks to release resources
+            # ═══ Phase 4: RECONCILE ═══
             _reconcile_completed_tasks(connection=conn)
-            
-            # Monitor activity health and trigger activity manager if stalled (Legacy fallback)
-            _monitor_activities(connection=conn)
                 
     except Exception as e:
         logger.error(f"Error in system bus cycle: {e}")
 
-def _watch_for_human_interventions(connection=None):
-    """
-    Detects if the user has manually updated the activity instructions.
-    If so, fires a high-priority 'INT-EVT-HUMAN' interrupt Task to the PM.
-    """
+
+# ═══════════════════════════════════════════════════════════════
+#  PHASE 1: EVENT DETECTION (Sensors)
+#  Each detector scans for a specific condition and emits
+#  structured events into the events table. No Task mutation here.
+# ═══════════════════════════════════════════════════════════════
+
+def _detect_task_anomalies(connection=None):
+    """Scan for blocked/failed tasks and emit events."""
     try:
-        # Check all active activities for instruction updates
+        anomalies = execute_query("""
+            SELECT t.id, t.activity_id, t.project_id, t.module_id, t.status, t.blocker_reason
+            FROM tasks t
+            WHERE t.status IN ('blocked', 'failed')
+        """, connection=connection)
+
+        for task in anomalies:
+            event_type = 'task_blocked' if task['status'] == 'blocked' else 'task_failed'
+            payload = json.dumps({
+                'reason': task['blocker_reason'] or 'Unknown failure',
+                'original_status': task['status'],
+                'module_id': task['module_id']
+            })
+            
+            # INSERT with dedup index — duplicate pending events for same task_id are silently ignored
+            execute_mutation("""
+                INSERT INTO events (event_type, source, severity, activity_id, task_id, resource_id, payload)
+                VALUES (%s, 'scheduler', 'warning', %s, %s, NULL, %s)
+                ON CONFLICT DO NOTHING
+            """, (event_type, task['activity_id'], task['id'], payload), connection=connection)
+
+    except Exception as e:
+        logger.error(f"Event detection (task anomalies) failed: {e}")
+
+
+def _detect_human_interventions(connection=None):
+    """Detect user instruction updates and emit events."""
+    try:
         updated_activities = execute_query("""
             SELECT a.id, a.project_id, a.user_instruction, a.instruction_version
             FROM activities a
-            LEFT JOIN system_state s ON s.key = 'last_human_irq_' || a.id
+            LEFT JOIN system_state s ON s.key = 'last_human_evt_' || a.id
             WHERE a.status = 'Active' 
               AND a.instruction_version > COALESCE((s.value->>0)::int, -1)
         """, connection=connection)
 
         for act in updated_activities:
             act_id = act['id']
-            proj_id = act['project_id']
-            instr = act['user_instruction'] or "No specific instruction provided."
             version = act['instruction_version']
-            
-            interrupt_id = f"INT-EVT-HUMAN-{act_id}-V{version}"
-            
-            logger.warning(f"HUMAN INTERCEPTION: User updated instructions for Activity {act_id}. Signaling Bus.")
+            instruction = act['user_instruction'] or "No specific instruction provided."
 
-            goal = (f"HUMAN COMMAND RECEIVED (Version {version}):\n\n"
-                    f"\"{instr}\"\n\n"
-                    "As the Control Plane, you must now re-evaluate your current DAG plan. "
-                    "Use your tools to adjust task goals, add new nodes, or reset states to satisfy the user's new requirements.")
+            logger.warning(f"HUMAN INTERVENTION: User updated instructions for Activity {act_id} (v{version}).")
 
-            # Insert Interrupt (Independent)
-            sql = """
-                INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, 
-                                   module_iteration_goal, estimated_hours, status)
-                SELECT %s, %s, %s, t.module_id, 'RES-ARCHITECT-001', %s, 0.5, 'ready'
-                FROM tasks t WHERE t.activity_id = %s LIMIT 1
-                ON CONFLICT (id) DO NOTHING
-            """
-            execute_mutation(sql, (interrupt_id, proj_id, act_id, goal, act_id), connection=connection)
-            
+            payload = json.dumps({
+                'instruction': instruction,
+                'version': version
+            })
+
+            execute_mutation("""
+                INSERT INTO events (event_type, source, severity, activity_id, payload)
+                VALUES ('human_instruction', 'human', 'critical', %s, %s)
+            """, (act_id, payload), connection=connection)
+
             # Record that we've processed this version
             execute_mutation("""
                 INSERT INTO system_state (key, value) 
-                VALUES ('last_human_irq_' || %s, %s)
+                VALUES ('last_human_evt_' || %s, %s)
                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
             """, (act_id, str(version)), connection=connection)
 
     except Exception as e:
-        logger.error(f"Failed to check for human interventions: {e}")
+        logger.error(f"Event detection (human interventions) failed: {e}")
+
+
+def _detect_stalled_activities(connection=None):
+    """Detect activities where all tasks have reached terminal state."""
+    try:
+        query = """
+            SELECT a.id, a.project_id,
+                   COUNT(t.id) as total_tasks,
+                   COUNT(CASE WHEN t.status IN ('done', 'code_done') THEN 1 END) as completed,
+                   COUNT(CASE WHEN t.status IN ('failed', 'blocked') THEN 1 END) as issues,
+                   COUNT(CASE WHEN t.status IN ('pending', 'ready', 'in_progress', 'needs_human_help') THEN 1 END) as active
+            FROM activities a
+            JOIN tasks t ON a.id = t.activity_id
+            WHERE a.status = 'Active'
+            GROUP BY a.id, a.project_id
+            HAVING COUNT(CASE WHEN t.status IN ('pending', 'ready', 'in_progress', 'needs_human_help') THEN 1 END) = 0
+        """
+        stalled = execute_query(query, connection=connection)
+
+        for act in stalled:
+            payload = json.dumps({
+                'completed': act['completed'],
+                'total': act['total_tasks'],
+                'issues': act['issues']
+            })
+
+            # Use activity_id as task_id for dedup (one stall event per activity)
+            execute_mutation("""
+                INSERT INTO events (event_type, source, severity, activity_id, task_id, payload)
+                VALUES ('activity_stalled', 'scheduler', 'normal', %s, %s, %s)
+                ON CONFLICT DO NOTHING
+            """, (act['id'], f"stall-{act['id']}", payload), connection=connection)
+
+    except Exception as e:
+        logger.error(f"Event detection (stalled activities) failed: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PHASE 2: EVENT CONSUMPTION
+#  Reads pending events ordered by severity, routes to handlers.
+# ═══════════════════════════════════════════════════════════════
+
+def _process_pending_events(connection=None):
+    """Consume pending events and translate them into task-level actions."""
+    try:
+        events = execute_query("""
+            SELECT * FROM events 
+            WHERE status = 'pending' 
+            ORDER BY 
+                CASE severity 
+                    WHEN 'critical' THEN 0 
+                    WHEN 'warning' THEN 1 
+                    ELSE 2 
+                END,
+                created_at ASC
+        """, connection=connection)
+
+        for event in events:
+            handler = EVENT_HANDLERS.get(event['event_type'])
+            if handler:
+                try:
+                    result_task_id = handler(event, connection)
+                    if result_task_id:
+                        execute_mutation("""
+                            UPDATE events 
+                            SET status = 'processing', resolved_by = %s 
+                            WHERE id = %s
+                        """, (result_task_id, event['id']), connection=connection)
+                        logger.info(f"Event #{event['id']} ({event['event_type']}) → routed to {result_task_id}")
+                    else:
+                        # Handler returned None — dismiss the event
+                        execute_mutation("""
+                            UPDATE events 
+                            SET status = 'dismissed', resolved_at = CURRENT_TIMESTAMP 
+                            WHERE id = %s
+                        """, (event['id'],), connection=connection)
+                        logger.info(f"Event #{event['id']} ({event['event_type']}) → dismissed (no action needed)")
+                except Exception as e:
+                    logger.error(f"Handler failed for event #{event['id']}: {e}")
+            else:
+                logger.warning(f"No handler registered for event type: {event['event_type']}")
+
+    except Exception as e:
+        logger.error(f"Event consumption failed: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PHASE 3: DATA PLANE (Promote + Dispatch)
+# ═══════════════════════════════════════════════════════════════
 
 def _promote_pending_tasks(connection=None):
     pending_tasks = execute_query("SELECT id, depends_on, is_approved FROM tasks WHERE status = 'pending'", connection=connection)
@@ -133,24 +394,6 @@ def _promote_pending_tasks(connection=None):
             execute_mutation("UPDATE tasks SET status = %s WHERE id = %s", (target_status, task_id), connection=connection)
             logger.info(f"Promoted {task_id} to {target_status} (Dependencies met).")
 
-def _reconcile_completed_tasks(connection=None):
-    """Checks for tasks that finished execution and releases their resource/locks."""
-    # Find tasks that are done but the resource is still marked as busy
-    # Note: This is a simplified reconciliation.
-    completed_tasks = execute_query("""
-        SELECT t.id, t.resource_id, r.workspace_path
-        FROM tasks t
-        JOIN resources r ON t.resource_id = r.id
-        WHERE t.status IN ('done', 'code_done', 'failed') AND r.is_available = False
-    """, connection=connection)
-    
-    for task in completed_tasks:
-        task_id = task['id']
-        res_id = task['resource_id']
-        workspace_path = task['workspace_path']
-        
-        logger.info(f"Reconciling completed task {task_id}. Releasing resource {res_id}.")
-        _cleanup_task_resources(workspace_path, res_id, connection=connection)
 
 def _dispatch_ready_tasks(connection=None):
     # 1. Grab all ready tasks
@@ -196,6 +439,7 @@ def _dispatch_ready_tasks(connection=None):
         
         threading.Thread(target=_trigger_agent_async, args=(agent_url, agent_id, lead_id, res_id, final_goal)).start()
 
+
 def _trigger_agent_async(url: str, agent_id: str, task_id: str, res_id: str, goal: str):
     """Sends the invocation request to the Agent's API."""
     try:
@@ -228,59 +472,36 @@ def _trigger_agent_async(url: str, agent_id: str, task_id: str, res_id: str, goa
             execute_mutation("UPDATE resources SET is_available = True WHERE id = %s", (res_id,))
         except: pass
 
-def _watch_for_interrupts(connection=None):
-    """
-    Control Plane Watchdog: Identifies blocked/failed tasks and emits Interrupt Events.
-    This awakens the Activity Manager (PM) to diagnose and heal the DAG.
-    """
-    try:
-        # Fetch tasks that need intervention
-        # We only care about root-level anomalies that haven't been resolved
-        anomalies = execute_query("""
-            SELECT t.id, t.activity_id, t.project_id, t.module_id, t.status, t.blocker_reason
-            FROM tasks t
-            WHERE t.status IN ('blocked', 'failed')
-              AND t.id NOT LIKE 'INT-EVT-%'
-        """, connection=connection)
 
-        for task in anomalies:
-            task_id = task['id']
-            act_id = task['activity_id']
-            proj_id = task['project_id']
-            mod_id = task['module_id']
-            status = task['status']
-            reason = task['blocker_reason'] or "Unknown failure"
-            
-            # Generate unique interrupt ID (Version 1 for this task blockage)
-            interrupt_id = f"INT-EVT-{task_id}"
-            
-            # Check if this specific interrupt was already fired
-            existing = execute_query("SELECT id FROM tasks WHERE id = %s", (interrupt_id,), connection=connection)
-            if existing:
-                continue
+# ═══════════════════════════════════════════════════════════════
+#  PHASE 4: RECONCILE
+# ═══════════════════════════════════════════════════════════════
 
-            logger.warning(f"SYSTEM INTERRUPT: Task {task_id} is {status}. Awakening Control Plane.")
+def _reconcile_completed_tasks(connection=None):
+    """Checks for tasks that finished execution and releases their resource/locks."""
+    completed_tasks = execute_query("""
+        SELECT t.id, t.resource_id, r.workspace_path
+        FROM tasks t
+        JOIN resources r ON t.resource_id = r.id
+        WHERE t.status IN ('done', 'code_done', 'failed') AND r.is_available = False
+    """, connection=connection)
+    
+    for task in completed_tasks:
+        task_id = task['id']
+        res_id = task['resource_id']
+        
+        logger.info(f"Reconciling completed task {task_id}. Releasing resource {res_id}.")
+        _cleanup_task_resources(res_id, connection=connection)
 
-            goal = (f"INTERRUPT SIGNAL: Agent execution blocked at node {task_id}.\n"
-                    f"Reason: {reason}\n"
-                    f"Status: {status}\n\n"
-                    "Your mission: As the Control Plane, analyze the activity state, diagnose why this node failed, "
-                    "and use your DAG mutation tools to heal the system (e.g. rewrite task, split task, or reset state).")
+        # Also resolve any events that were linked to this task
+        execute_mutation("""
+            UPDATE events 
+            SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP 
+            WHERE resolved_by = %s AND status = 'processing'
+        """, (task_id,), connection=connection)
 
-            # Insert the Interrupt Task (Independent of DAG dependencies)
-            sql = """
-                INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, 
-                                   module_iteration_goal, estimated_hours, status)
-                VALUES (%s, %s, %s, %s, 'RES-ARCHITECT-001', %s, 0.5, 'ready')
-                ON CONFLICT (id) DO NOTHING
-            """
-            execute_mutation(sql, (interrupt_id, proj_id, act_id, mod_id, goal), connection=connection)
-            logger.info(f"Interrupt Event {interrupt_id} successfully emitted to Bus.")
 
-    except Exception as e:
-        logger.error(f"Failed to emit interrupts: {e}")
-
-def _cleanup_task_resources(workspace_path: str, resource_id: Optional[str], connection=None):
+def _cleanup_task_resources(resource_id: Optional[str], connection=None):
     """Marks resource as available."""
     try:
         if resource_id:
@@ -289,54 +510,10 @@ def _cleanup_task_resources(workspace_path: str, resource_id: Optional[str], con
     except Exception as e:
         logger.error(f"Cleanup error for resource {resource_id}: {e}")
 
-def _monitor_activities(connection=None):
-    """
-    Checks if any active Activities have completely stalled or finished.
-    If so, summons the Activity Manager to analyze results and decide next steps.
-    """
-    query = """
-        SELECT a.id, a.project_id, m.id as root_module_id,
-               COUNT(t.id) as total_tasks,
-               COUNT(CASE WHEN t.status IN ('done', 'code_done') THEN 1 END) as completed,
-               COUNT(CASE WHEN t.status IN ('failed', 'blocked') THEN 1 END) as issues,
-               COUNT(CASE WHEN t.status IN ('pending', 'ready', 'in_progress', 'needs_human_help') THEN 1 END) as active
-        FROM activities a
-        JOIN tasks t ON a.id = t.activity_id
-        JOIN modules m ON t.module_id = m.id AND m.parent_module_id IS NULL
-        WHERE a.status = 'Active'
-        GROUP BY a.id, a.project_id, m.id
-        HAVING COUNT(CASE WHEN t.status IN ('pending', 'ready', 'in_progress', 'needs_human_help') THEN 1 END) = 0
-    """
-    stalled_activities = execute_query(query, connection=connection)
-    
-    for act in stalled_activities:
-        act_id = act['id']
-        project_id = act['project_id']
-        root_module_id = act['root_module_id']
-        rev_task_id = f"REV-{act_id}"
-        
-        # Check if intervention task already exists
-        exist_check = execute_query("SELECT id FROM tasks WHERE id = %s", (rev_task_id,), connection=connection)
-        if exist_check:
-            continue
-            
-        logger.warning(f"Activity {act_id} stalled/finished. Summoning Activity Manager.")
-        
-        goal = (f"Review Activity {act_id}. All subtasks are terminal. "
-                f"Completed: {act['completed']}/{act['total_tasks']}. Issues: {act['issues']}. "
-                "Analyze the execution results and either officially close the Activity or break down new tasks to fix issues.")
-                
-        # Insert a special Intervention Task for the Activity Manager
-        sql = """
-            INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, 
-                               module_iteration_goal, estimated_hours, status)
-            VALUES (%s, %s, %s, %s, 'RES-ARCHITECT-001', %s, 1.0, 'ready')
-        """
-        try:
-            execute_mutation(sql, (rev_task_id, project_id, act_id, root_module_id, goal), connection=connection)
-            logger.info(f"Created intervention task {rev_task_id} for Activity Manager.")
-        except Exception as e:
-            logger.error(f"Failed to create intervention task for {act_id}: {e}")
+
+# ═══════════════════════════════════════════════════════════════
+#  DAEMON
+# ═══════════════════════════════════════════════════════════════
 
 def scheduler_daemon():
     """Background loop for continuous scheduling."""
