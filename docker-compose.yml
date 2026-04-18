@@ -13,186 +13,111 @@ services:
     ports:
       - "5433:5432"
 
-  smart_task_copilot:
-    image: smart_task_copilot
-    build:
-      context: .
-      dockerfile: ./Dockerfile
-    ports:
-      - "45666:45666"
-    container_name: smart_task_copilot
-    depends_on:
-      - db
-    environment:
-      - MCP_TRANSPORT=http
-      - PORT=45666
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - SMART_WORKSPACE_ROOT=/workspaces
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
-      - ALLOWED_HOSTS=*
-      - UVICORN_TRUSTED_HOSTS=*
-      - AGENT_BASE_PATH=/app
-      - DOCKER_MANAGED_AGENTS=true
-      - AGENT_ACTIVITY_MANAGER_HOST=activity_manager
-      - AGENT_QUANT_DEVELOPER_HOST=quant_developer
-      - AGENT_DATA_ENGINEER_HOST=data_engineer
-      - AGENT_QUANT_RESEARCHER_HOST=quant_researcher
-      - AGENT_RISK_MANAGER_HOST=risk_manager
-      - AGENT_EXECUTION_TRADER_HOST=execution_trader
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
-      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-    # REMOVED: local volume binds for 100% isolation
-    restart: on-failure
 
-  activity_manager:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+  task_planner:
+    build: .
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - SESSION_SERVICE_URI=postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub
-      - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
-      - AGENT_BASE_PATH=/app
-      - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-activity-manager.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - AGENT_NAME=activity_manager
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9011", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
-    # REMOVED: local volume binds for 100% isolation
-    depends_on:
-      - db
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-activity-manager.git
+      - AGENT_NAME=task_planner
+      - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - ADK_A2A_SERVER_PORT=9011
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     ports:
       - "9011:9011"
+    command: ["adk", "api_server", "./", "--port", "9011"]
+    depends_on:
+      - db
 
-  quant_developer:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+  coder_expert:
+    build: .
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
+      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-quant-developer.git
+      - AGENT_NAME=coder_expert
+      - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - ADK_A2A_SERVER_PORT=9012
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - SMART_WORKSPACE_ROOT=/workspaces
-      - SESSION_SERVICE_URI=postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub
-      - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
-      - AGENT_BASE_PATH=/app
-      - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-quant-developer.git
-      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - AGENT_NAME=quant_developer
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9012", "--a2a", "--host", "0.0.0.0", "--session_service_uri", "postgresql+psycopg2://smart_user:smart_pass@db:5432/smart_task_hub?options=-csearch_path%3Dadk"]
     ports:
       - "9012:9012"
-    # REMOVED: local volume binds for 100% isolation
+    command: ["adk", "api_server", "./", "--port", "9012"]
     depends_on:
       - db
 
-  data_engineer:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+  trader_expert:
+    build: .
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
-      - AGENT_BASE_PATH=/app
-      - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-data-engineer.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - AGENT_NAME=data_engineer
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9013", "--host", "0.0.0.0"]
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-execution-trader.git
+      - AGENT_NAME=trader_expert
+      - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - ADK_A2A_SERVER_PORT=9013
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     ports:
       - "9013:9013"
-    # REMOVED: local volume binds for 100% isolation
+    command: ["adk", "api_server", "./", "--port", "9013"]
     depends_on:
       - db
 
-  quant_researcher:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+  research_expert:
+    build: .
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
-      - AGENT_BASE_PATH=/app
-      - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-quant-researcher.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - AGENT_NAME=quant_researcher
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9014", "--host", "0.0.0.0"]
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-quant-researcher.git
+      - AGENT_NAME=research_expert
+      - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - ADK_A2A_SERVER_PORT=9014
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     ports:
       - "9014:9014"
-    # REMOVED: local volume binds for 100% isolation
+    command: ["adk", "api_server", "./", "--port", "9014"]
     depends_on:
       - db
 
-  risk_manager:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+  risk_expert:
+    build: .
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
-      - AGENT_BASE_PATH=/app
-      - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-risk-manager.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - AGENT_NAME=risk_manager
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9015", "--host", "0.0.0.0"]
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-risk-manager.git
+      - AGENT_NAME=risk_expert
+      - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - ADK_A2A_SERVER_PORT=9015
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     ports:
       - "9015:9015"
-    # REMOVED: local volume binds for 100% isolation
+    command: ["adk", "api_server", "./", "--port", "9015"]
     depends_on:
       - db
 
-  execution_trader:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+  data_expert:
+    build: .
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - AGENT_MCP_ENDPOINT=http://smart_task_copilot:45666/mcp/
-      - AGENT_BASE_PATH=/app
-      - PYTHONPATH=/app
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-execution-trader.git
       - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - AGENT_NAME=execution_trader
-    command: ["/app/.venv/bin/adk", "api_server", "smart_task_app/agents", "--port", "9016", "--host", "0.0.0.0"]
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-data-engineer.git
+      - AGENT_NAME=data_expert
+      - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - ADK_A2A_SERVER_PORT=9016
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     ports:
       - "9016:9016"
-    # REMOVED: local volume binds for 100% isolation
+    command: ["adk", "api_server", "./", "--port", "9016"]
+    depends_on:
+      - db
+
+
+  hub_pm:
+    build: .
+    environment:
+      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
+      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
+      - AGENT_NAME=hub_pm
+      - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - ADK_A2A_SERVER_PORT=45666
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    ports:
+      - "45666:45666"
+    command: ["adk", "web", "./", "--port", "45666"]
     depends_on:
       - db
 

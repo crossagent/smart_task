@@ -1,48 +1,31 @@
-# Use an official Python runtime as a parent image
+# Use a slim Python 3.13 image as base
 FROM python:3.13-slim
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# Switch to Tsinghua mirror for faster builds in China
+RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources
 
-# Install system dependencies (Git, SSH, etc.)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies (Git is required for our bootstrap strategy)
+RUN apt-get update && apt-get install -y \
     git \
-    openssh-client \
-    ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Basic Git Configuration
-RUN git config --global user.name "Smart Task Agent" && \
-    git config --global user.email "agent@smart-task.hub" && \
-    git config --global pull.rebase true && \
-    git config --global rebase.autoStash true
+# Install uv (standard for all our agents)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-# Set the working directory in the container
+# Set up the application directory
 WORKDIR /app
 
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
+# Copy the bootstrap script OUTSIDE of /app to prevent self-deletion during bootstrap
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Copy project files
-COPY pyproject.toml uv.lock ./
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
-# Install dependencies (caching the cache)
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project
+# Entrypoint is the orchestrator of expert isolation
+ENTRYPOINT ["/entrypoint.sh"]
 
-# Copy the rest of the application code
-COPY . .
-
-# Install the project
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen
-
-# Expose the port for SSE transport
-EXPOSE 45666
-
-# Set default environment variables for Docker deployment
-ENV MCP_TRANSPORT=http
-ENV PORT=45666
-
-# Use the virtual environment created by uv
-CMD ["/app/.venv/bin/python", "-m", "src.mcp_server.server"]
+# Default command (can be overridden in docker-compose)
+CMD ["python"]

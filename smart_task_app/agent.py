@@ -7,18 +7,18 @@ from google.adk.apps import App
 from google.adk.plugins import LoggingPlugin
 from .shared_libraries.constants import MODEL
 
-# 1. 定义远程 Architect Agent (分解专家)
+# 1. 定义远程 Architect Expert (分解专家)
 # 默认端口 9011，支持环境变量覆盖
-ARCHITECT_URL = os.getenv("ARCHITECT_AGENT_URL", "http://localhost:9011/a2a/architect/.well-known/agent-card.json")
+ARCHITECT_URL = os.getenv("ARCHITECT_AGENT_URL", "http://task_planner:9011/a2a/task_planner/.well-known/agent-card.json")
 architect_agent = RemoteA2aAgent(
     name="architect",
     agent_card=ARCHITECT_URL,
     description="负责逻辑熵减与载荷驱动的任务分解"
 )
 
-# 2. 定义远程 Coder Agent (原子化专家)
+# 2. 定义远程 Coder Expert (原子化专家)
 # 默认端口 9012，支持环境变量覆盖
-CODER_URL = os.getenv("CODER_AGENT_URL", "http://localhost:9012/a2a/coder/.well-known/agent-card.json")
+CODER_URL = os.getenv("CODER_AGENT_URL", "http://coder_expert:9012/a2a/coder_expert/.well-known/agent-card.json")
 coder_agent = RemoteA2aAgent(
     name="coder",
     agent_card=CODER_URL,
@@ -28,15 +28,15 @@ coder_agent = RemoteA2aAgent(
 # 3. 使用标准 A2A Sequential 模式构建流水线
 # 这是 ADK 最推荐的多 Agent 协作方式：架构师分解 -> 代码实现
 root_agent = SequentialAgent(
-    name="SmartTaskPipeline",
+    name="hub_pm",
     sub_agents=[architect_agent, coder_agent],
-    description="智能任务分解与执行流水线 (A2A 标准版)"
+    description="Project Manager (项目经理): 负责宏观任务分配与多专家协同调度。"
 )
 
 # 4. App 配置
 # 这里我们定义主 App，它作为外部访问的唯一入口
 app = App(
-    name="smart_task_app",
+    name="hub_pm",
     root_agent=root_agent,
     plugins=[LoggingPlugin()]  # 标准 A2A/Agent 日志打印方式
 )
