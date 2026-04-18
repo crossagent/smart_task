@@ -57,8 +57,8 @@ app.mount("/mcp", mcp.streamable_http_app())
 app.include_router(dashboard_router)
 
 # 5. Serve Static Dashboard at /dashboard
-if os.path.exists("dashboard_v2/dist"):
-    app.mount("/dashboard", StaticFiles(directory="dashboard_v2/dist", html=True), name="dashboard")
+if os.path.exists("dashboard/dist"):
+    app.mount("/dashboard", StaticFiles(directory="dashboard/dist", html=True), name="dashboard")
     
     @app.get("/")
     async def root_redirect():
