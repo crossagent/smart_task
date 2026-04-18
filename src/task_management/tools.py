@@ -1,4 +1,4 @@
-import json
+﻿import json
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 from .db import execute_query, execute_mutation, CustomEncoder
@@ -420,14 +420,14 @@ def get_activity_schedule_report(activity_id: str) -> str:
         tasks = execute_query(tasks_query, (activity_id,))
 
         status_emoji = {
-            'pending': '�?,
-            'ready': '🔵',
-            'in_progress': '🔄',
-            'code_done': '🧑‍�?,
-            'done': '🟢',
-            'failed': '🔴',
-            'blocked': '🚫',
-            'needs_human_help': '🆘'
+            'pending': '⏳',
+            'ready': '✅',
+            'in_progress': '🏃',
+            'code_done': '🏗️',
+            'done': '馃煝',
+            'failed': '馃敶',
+            'blocked': '馃毇',
+            'needs_human_help': '馃啒'
         }
 
         report = [f"# Activity: {act['name']} ({act['priority']})"]
@@ -446,13 +446,13 @@ def get_activity_schedule_report(activity_id: str) -> str:
         report.append(f"**Estimated Total Effort**: {total_hours} hours\n")
 
         for mod_name, m_tasks in modules_dict.items():
-            report.append(f"### 📦 Module: {mod_name}")
+            report.append(f"### 馃摝 Module: {mod_name}")
             for t in m_tasks:
-                emoji = status_emoji.get(t['status'], '�?)
+                emoji = status_emoji.get(t['status'], '鉂?)
                 hrs = f"{t['estimated_hours']}h" if t['estimated_hours'] else "N/A"
                 report.append(f"- {emoji} **[{t['status'].upper()}]** {t['module_iteration_goal']} (ID: `{t['id']}`, ETA: {hrs})")
                 if t['blocker_reason'] and t['status'] in ['failed', 'blocked', 'needs_human_help']:
-                    report.append(f"  > **🚨 Blocker**: {t['blocker_reason']}")
+                    report.append(f"  > **馃毃 Blocker**: {t['blocker_reason']}")
             report.append("")
 
         return "\n".join(report)
