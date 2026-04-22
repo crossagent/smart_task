@@ -15,6 +15,26 @@ print(f">>> [conftest] Using DB_NAME: {os.environ.get('DB_NAME')}")
 # Import from src ONLY after env vars are set
 from src.task_management.db import get_db_connection
 
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_stale_connections():
+    """Forcefully terminate any lingering database connections before the test session starts."""
+    db_name = os.getenv("DB_NAME", "smart_task_test")
+    try:
+        # Connect to 'postgres' management DB to perform the termination
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            user=os.getenv("DB_USER", "smart_user"),
+            password=os.getenv("DB_PASSWORD", "smart_pass"),
+            dbname="postgres"
+        )
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}' AND pid <> pg_backend_pid();")
+        conn.close()
+    except Exception as e:
+        print(f"\n>>> [conftest] Warning: Could not cleanup stale connections: {e}")
+
 @pytest.fixture(scope="session")
 def db_conn():
     """Create a session-wide database connection."""
