@@ -1,8 +1,17 @@
+import os
 import json
-from typing import Optional
-from mcp.server.fastmcp import FastMCP
+import logging
+from typing import Optional, Any
+from fastmcp import FastMCP
+
 from .db import execute_query, execute_mutation, CustomEncoder
 
+logger = logging.getLogger("smart_task.task_management.tools")
+
+# 1. Initialize FastMCP instance here to enable decorator usage across the module
+mcp = FastMCP("Smart Task Hub")
+
+@mcp.tool()
 def query_sql(query: str) -> str:
     """
     Execute a raw read-only SQL query against the smart_task PostgreSQL database.
@@ -21,6 +30,7 @@ def query_sql(query: str) -> str:
     except Exception as e:
         return f"Error executing query: {str(e)}"
 
+@mcp.tool()
 def get_database_schema() -> str:
     """
     Retrieve the structure (schema) of all tables in the smart_task database.
@@ -51,6 +61,7 @@ def get_database_schema() -> str:
     except Exception as e:
         return f"Error fetching schema: {str(e)}"
 
+@mcp.tool()
 def get_task_context(task_id: str) -> str:
     """
     Retrieve the full context for a given Task, including its parent Activity and Project details.
@@ -75,6 +86,7 @@ def get_task_context(task_id: str) -> str:
     except Exception as e:
         return f"Database Error: {str(e)}"
 
+@mcp.tool()
 def upsert_resource(
     id: str,
     name: str,
@@ -111,15 +123,15 @@ def upsert_resource(
             updated_at = CURRENT_TIMESTAMP
     """
     try:
-        count = execute_mutation(sql, (
+        execute_mutation(sql, (
             id, name, org_role, dingtalk_id, company_name, weekly_capacity, email,
             resource_type, agent_dir, workspace_path, is_available
         ))
-        action = "Inserted" if count == 1 else "Saved (no changes) or Updated"
         return f"Successfully processed resource '{name}' (ID: {id})."
     except Exception as e:
         return f"Error saving resource: {str(e)}"
 
+@mcp.tool()
 def upsert_project(
     id: str,
     name: str,
@@ -146,6 +158,7 @@ def upsert_project(
     except Exception as e:
         return f"Error saving project: {str(e)}"
 
+@mcp.tool()
 def upsert_activity(
     id: str,
     project_id: str,
@@ -172,6 +185,7 @@ def upsert_activity(
     except Exception as e:
         return f"Error saving activity: {str(e)}"
 
+@mcp.tool()
 def upsert_module(
     id: str,
     project_id: str,
@@ -196,6 +210,7 @@ def upsert_module(
     except Exception as e:
         return f"Error saving module: {str(e)}"
 
+@mcp.tool()
 def upsert_task(
     id: str,
     module_id: str,
@@ -242,6 +257,7 @@ def upsert_task(
     except Exception as e:
         return f"Error saving task: {str(e)}"
 
+@mcp.tool()
 def list_tasks_for_review() -> str:
     """
     List all tasks that require human approval.
@@ -263,6 +279,7 @@ def list_tasks_for_review() -> str:
     except Exception as e:
         return f"Error listing tasks: {str(e)}"
 
+@mcp.tool()
 def approve_task(task_id: str) -> str:
     """
     Manually approve a task for execution.
@@ -288,6 +305,7 @@ def approve_task(task_id: str) -> str:
     except Exception as e:
         return f"Error approving task: {str(e)}"
 
+@mcp.tool()
 def reject_task(task_id: str, reason: str) -> str:
     """
     Reject a task and mark it as blocked with a reason.
@@ -301,6 +319,7 @@ def reject_task(task_id: str, reason: str) -> str:
     except Exception as e:
         return f"Error rejecting task: {str(e)}"
 
+@mcp.tool()
 def submit_task_deliverable(
     task_id: str,
     status: str,
@@ -320,6 +339,7 @@ def submit_task_deliverable(
     except Exception as e:
         return f"Error submitting deliverable: {str(e)}"
 
+@mcp.tool()
 def get_task_logs(task_id: str) -> str:
     """
     Retrieve the execution logs (Events) for a given Task ID.
@@ -358,13 +378,14 @@ def get_task_logs(task_id: str) -> str:
                     extracted_text = str(content)
             else:
                 extracted_text = str(content)
-
+ 
             output.append(f"[{timestamp}] {author}: {extracted_text}")
         
         return "\n".join(output)
     except Exception as e:
         return f"Database Error: {str(e)} (Ensure Agents have initialized the events table)"
 
+@mcp.tool()
 def delete_record(table: str, id: str) -> str:
     """Delete a record by ID from a specified table."""
     allowed_tables = {"resources", "projects", "activities", "modules", "tasks"}
@@ -380,6 +401,7 @@ def delete_record(table: str, id: str) -> str:
     except Exception as e:
         return f"Error deleting record: {str(e)}"
 
+@mcp.tool()
 def report_blocker(task_id: str, reason: str) -> str:
     """
     Report a blocker or failure for a task. 
@@ -402,6 +424,7 @@ def report_blocker(task_id: str, reason: str) -> str:
     except Exception as e:
         return f"Error reporting blocker: {str(e)}"
 
+@mcp.tool()
 def get_activity_schedule_report(activity_id: str) -> str:
     """
     Generates a human-readable hierarchical Markdown report of the task schedule and status 
@@ -412,12 +435,12 @@ def get_activity_schedule_report(activity_id: str) -> str:
         acts = execute_query(activity_query, (activity_id,))
         if not acts: return f"Activity {activity_id} not found."
         act = acts[0]
-
+ 
         # Get Modules progress
         prog_query = "SELECT completion_percentage FROM v_activity_progress WHERE activity_id = %s"
         prog = execute_query(prog_query, (activity_id,))
         completion = prog[0]['completion_percentage'] if prog else 0
-
+ 
         # Get Tasks
         tasks_query = """
             SELECT m.name as module_name, t.id, t.module_iteration_goal, t.estimated_hours, t.status, t.blocker_reason
@@ -427,23 +450,23 @@ def get_activity_schedule_report(activity_id: str) -> str:
             ORDER BY m.name ASC, t.created_at ASC
         """
         tasks = execute_query(tasks_query, (activity_id,))
-
+ 
         status_emoji = {
             'pending': '⏳',
             'ready': '✅',
             'in_progress': '🏃',
             'code_done': '🏗️',
-            'done': '馃煝',
-            'failed': '馃敶',
-            'blocked': '馃毇',
-            'needs_human_help': '馃啒'
+            'done': '✅',
+            'failed': '❌',
+            'blocked': '🚫',
+            'needs_human_help': '🆘'
         }
-
+ 
         report = [f"# Activity: {act['name']} ({act['priority']})"]
         report.append(f"**Status**: {act['status']}")
         report.append(f"**Completion**: {completion}%")
         report.append("\n## Schedule & Tasks")
-
+ 
         total_hours = 0
         from collections import defaultdict
         modules_dict = defaultdict(list)
@@ -453,21 +476,22 @@ def get_activity_schedule_report(activity_id: str) -> str:
                 total_hours += float(t['estimated_hours'])
         
         report.append(f"**Estimated Total Effort**: {total_hours} hours\n")
-
+ 
         for mod_name, m_tasks in modules_dict.items():
-            report.append(f"### 馃摝 Module: {mod_name}")
+            report.append(f"### 📦 Module: {mod_name}")
             for t in m_tasks:
                 emoji = status_emoji.get(t['status'], '❓')
                 hrs = f"{t['estimated_hours']}h" if t['estimated_hours'] else "N/A"
                 report.append(f"- {emoji} **[{t['status'].upper()}]** {t['module_iteration_goal']} (ID: `{t['id']}`, ETA: {hrs})")
                 if t['blocker_reason'] and t['status'] in ['failed', 'blocked', 'needs_human_help']:
-                    report.append(f"  > **馃毃 Blocker**: {t['blocker_reason']}")
+                    report.append(f"  > **🚩 Blocker**: {t['blocker_reason']}")
             report.append("")
-
+ 
         return "\n".join(report)
     except Exception as e:
         return f"Error generating schedule report: {str(e)}"
 
+@mcp.tool()
 def emit_event(
     event_type: str,
     source: str,
@@ -480,11 +504,6 @@ def emit_event(
     """
     Emit a system event to the Event Bus.
     Events are consumed by the scheduler and translated into Task mutations.
-    
-    Common event_types: task_blocked, task_failed, human_instruction, activity_stalled, agent_timeout, custom.
-    source: who is emitting (e.g. 'human', 'agent:RES-XXX', 'scheduler').
-    severity: 'normal' | 'warning' | 'critical'.
-    payload: JSON string with event-specific data.
     """
     sql = """
         INSERT INTO events (event_type, source, severity, activity_id, task_id, resource_id, payload)
@@ -498,10 +517,10 @@ def emit_event(
     except Exception as e:
         return f"Error emitting event: {str(e)}"
 
+@mcp.tool()
 def list_pending_events() -> str:
     """
     List all pending (unprocessed) system events, ordered by severity then time.
-    Use this to understand what signals are waiting to be acted upon.
     """
     query = """
         SELECT id, event_type, source, severity, activity_id, task_id, 
@@ -523,24 +542,3 @@ def list_pending_events() -> str:
         return json.dumps(results, indent=2, cls=CustomEncoder, ensure_ascii=False)
     except Exception as e:
         return f"Error listing events: {str(e)}"
-
-def register_tools(mcp: FastMCP):
-    """Registers all CRUD database tools to the FastMCP server."""
-    mcp.tool()(query_sql)
-    mcp.tool()(get_database_schema)
-    mcp.tool()(get_task_context)
-    mcp.tool()(upsert_resource)
-    mcp.tool()(upsert_project)
-    mcp.tool()(upsert_activity)
-    mcp.tool()(upsert_module)
-    mcp.tool()(upsert_task)
-    mcp.tool()(submit_task_deliverable)
-    mcp.tool()(delete_record)
-    mcp.tool()(get_task_logs)
-    mcp.tool()(report_blocker)
-    mcp.tool()(get_activity_schedule_report)
-    mcp.tool()(list_tasks_for_review)
-    mcp.tool()(approve_task)
-    mcp.tool()(reject_task)
-    mcp.tool()(emit_event)
-    mcp.tool()(list_pending_events)
