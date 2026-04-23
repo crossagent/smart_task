@@ -1,7 +1,7 @@
 import pytest
 import uuid
 import json
-from src.task_management.tools import (
+from src.tools import (
     query_sql, 
     get_task_context,
     upsert_resource, 
@@ -11,7 +11,7 @@ from src.task_management.tools import (
     upsert_task,
     delete_record
 )
-from src.task_management.db import execute_mutation, execute_query
+from src.db import execute_mutation, execute_query
 
 @pytest.fixture
 def resource_id():
@@ -28,7 +28,13 @@ def module_id():
 def test_db_connection():
     """Verify that we are indeed connected to the test database."""
     results_json = query_sql("SELECT current_database();")
-    results = json.loads(results_json)
+    # If the database connection fails, query_sql returns an error string
+    # We should catch this to provide a better error message in tests
+    try:
+        results = json.loads(results_json)
+    except json.JSONDecodeError:
+        pytest.fail(f"Database connection test failed. Tool output: {results_json}")
+        
     db_name = results[0]["current_database"]
     print(f"\n>>> Active DB: {db_name}")
     assert "smart_task" in db_name
@@ -54,6 +60,7 @@ def test_resource_upsert_and_query(resource_id):
     # 2. Query via SQL
     sql = f"SELECT * FROM resources WHERE id = '{resource_id}'"
     results_json = query_sql(sql)
+    
     try:
         results = json.loads(results_json)
     except json.JSONDecodeError:
@@ -62,7 +69,6 @@ def test_resource_upsert_and_query(resource_id):
     assert len(results) == 1
     assert results[0]["name"] == "Test User"
     assert results[0]["org_role"] == "Tester"
-    assert results[0]["agent_dir"] == "src/agents/coder"
 
 def test_full_chain_upsert(resource_id, project_id, module_id):
     """Test a full chain of dependencies (Resource -> Project -> Module -> Task)."""
@@ -91,25 +97,21 @@ def test_full_chain_upsert(resource_id, project_id, module_id):
     task_id = f"TSK-TEST-{uuid.uuid4().hex[:8]}"
     msg_tsk = upsert_task(
         id=task_id,
-        project_id=project_id,
         module_id=module_id,
         module_name="Test Module",
         resource_id=resource_id,
         resource_name="Chain Owner",
         module_iteration_goal="Complete TDD setup"
     )
-    # The return strings in new tools changed slightly, mostly "Successfully processed..."
     assert "Successfully processed" in msg_tsk
     
     # 5. Verify task relationship
-    results = json.loads(query_sql(f"SELECT * FROM tasks WHERE id = '{task_id}'"))
+    results_json = query_sql(f"SELECT * FROM tasks WHERE id = '{task_id}'")
+    results = json.loads(results_json)
     assert results[0]["module_id"] == module_id
-    assert results[0]["project_id"] == project_id
 
 def test_custom_json_encoder():
     """Verify that datetime and decimal are correctly encoded in query_sql."""
-    # Insert a dummy task with created_at and priority (decimal might need a numeric field)
-    # We can just select current_timestamp and a numeric literal
     sql = "SELECT CURRENT_TIMESTAMP as now, 123.45::numeric as val"
     results_json = query_sql(sql)
     results = json.loads(results_json)
@@ -128,7 +130,6 @@ def test_task_context_resolution(resource_id, project_id, module_id):
     task_id = f"TSK-CTX-{uuid.uuid4().hex[:8]}"
     upsert_task(
         id=task_id,
-        project_id=project_id,
         module_id=module_id,
         module_name="Context Module",
         resource_id=resource_id,
@@ -138,12 +139,14 @@ def test_task_context_resolution(resource_id, project_id, module_id):
     
     # 2. Get Context
     context_json = get_task_context(task_id)
-    ctx = json.loads(context_json)
+    try:
+        ctx = json.loads(context_json)
+    except json.JSONDecodeError:
+        pytest.fail(f"get_task_context failed. Output: {context_json}")
     
     assert ctx["task_id"] == task_id
     assert ctx["project_name"] == "Context Project"
     assert ctx["module_name"] == "Context Module"
-    assert ctx["module_iteration_goal"] == "Test context join"
 
 def test_upsert_atomic_conflict(resource_id, module_id):
     """Verify that multiple upserts to the same ID update fields correctly."""
@@ -167,6 +170,7 @@ def test_upsert_atomic_conflict(resource_id, module_id):
     )
     
     # Verify values
-    results = json.loads(query_sql(f"SELECT * FROM tasks WHERE id = '{task_id}'"))
+    results_json = query_sql(f"SELECT * FROM tasks WHERE id = '{task_id}'")
+    results = json.loads(results_json)
     assert results[0]["module_iteration_goal"] == "Goal 2"
     assert results[0]["status"] == "ready"

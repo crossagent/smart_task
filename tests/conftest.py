@@ -13,7 +13,7 @@ if not os.getenv("DB_NAME"):
 print(f">>> [conftest] Using DB_NAME: {os.environ.get('DB_NAME')}")
 
 # Import from src ONLY after env vars are set
-from src.task_management.db import get_db_connection
+from src.db import get_db_connection
 
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_stale_connections():

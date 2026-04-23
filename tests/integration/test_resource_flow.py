@@ -1,123 +1,107 @@
+"""
+Resource Flow and Lifecycle Integration Test Suite.
+
+Tests how resources (Agents) are reserved, heartbeat-monitored, and released 
+within the system control bus.
+"""
+
 import pytest
 import respx
-import httpx
-from unittest.mock import MagicMock, patch, ANY
-# Import the actual core cycle
-from src.task_execution.scheduler import run_system_bus_cycle as run_scheduler_tick
-from src.resource_management.supervisor import agent_supervisor
-from src.task_management.db import execute_query, execute_mutation
+import json
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+from src.scheduler import run_system_bus_cycle
+from src.supervisor import agent_supervisor
+from src.db import execute_query, execute_mutation
+
+
+# ==============================================================================
+#  FIXTURES
+# ==============================================================================
+SLICE_SQL = Path(__file__).parent.parent / "fixtures" / "test_slice.sql"
+
 
 @pytest.fixture(autouse=True)
-def db_setup_cleanup(db_conn):
-    """Ensure the database is clean before and after tests."""
-    # 1. Clean up potential leftover data
-    execute_mutation("DELETE FROM system_state")
-    execute_mutation("DELETE FROM tasks")
-    execute_mutation("DELETE FROM modules")
-    execute_mutation("DELETE FROM activities")
-    execute_mutation("DELETE FROM projects")
-    execute_mutation("DELETE FROM resources")
-    
-    # 2. Seed system state
-    execute_mutation("INSERT INTO system_state (key, value) VALUES ('run_mode', '\"auto\"')")
-    execute_mutation("INSERT INTO system_state (key, value) VALUES ('step_count', '0')")
-    
+def seed_test_slice(db_conn):
+    sql = SLICE_SQL.read_text(encoding="utf-8")
+    cur = db_conn.cursor()
+    cur.execute(sql)
+    db_conn.commit()
+    cur.close()
     yield
-    
-    # 3. Cleanup after test
-    execute_mutation("DELETE FROM system_state")
-    execute_mutation("DELETE FROM tasks")
-    execute_mutation("DELETE FROM modules")
-    execute_mutation("DELETE FROM activities")
-    execute_mutation("DELETE FROM projects")
-    execute_mutation("DELETE FROM resources")
 
-@respx.mock
-def test_full_pool_dispatch_and_reconcile():
-    """
-    INTEGRATION TEST: Verifies the full scheduler bus cycle using a REAL database.
-    Flow: Ready Task -> Dispatch -> Busy Resource -> Task Done -> Reconcile -> Available Resource.
-    """
-    
-    # 1. SEED DATA into Real Database
-    # -----------------------------
-    # Create Resource
-    execute_mutation("""
-        INSERT INTO resources (id, name, org_role, workspace_path, is_available)
-        VALUES ('R1', 'Test Agent R1', 'Coder', '/work/w1', True),
-               ('RES-ARCHITECT-001', 'System Architect', 'Control Plane', '/app', True)
-    """)
-    
-    # Create Project
-    execute_mutation("""
-        INSERT INTO projects (id, name, initiator_res_id, memo_content)
-        VALUES ('P1', 'Test Project', 'R1', 'Test Memo')
-    """)
-    
-    # Create Activity
-    execute_mutation("""
-        INSERT INTO activities (id, name, project_id, owner_res_id)
-        VALUES ('A1', 'Test Activity', 'P1', 'R1')
-    """)
-    
-    # Create Module
-    execute_mutation("""
-        INSERT INTO modules (id, name, owner_res_id)
-        VALUES ('M1', 'Test Module', 'R1')
-    """)
-    
-    # Create Task (Ready for dispatch)
-    execute_mutation("""
-        INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, module_iteration_goal, status)
-        VALUES ('T1', 'P1', 'A1', 'M1', 'R1', 'Build a feature', 'ready')
-    """)
 
-    # 2. Configure Agent Supervisor Pool
-    # ---------------------------------
+@pytest.fixture
+def mock_agent_pool():
+    original_pool = agent_supervisor.pool
     agent_supervisor.pool = {
-        "R1": {"url": "http://agent-r1:9001", "agent_id": "r1-agent"}
+        "RES-ARCHITECT-001": {"url": "http://pm:9010",    "agent_id": "pm-agent"},
+        "RES-CODER-001": {"url": "http://coder1:9001", "agent_id": "coder-agent-1"},
+        "RES-CODER-002": {"url": "http://coder2:9002", "agent_id": "coder-agent-2"},
+        "RES-CODER-003": {"url": "http://coder3:9003", "agent_id": "coder-agent-3"},
     }
+    with respx.mock(assert_all_called=False):
+        respx.post(url__regex=r"http://.*:900\d/.*").respond(200, json={"status": "ok"})
+        yield agent_supervisor.pool
+    agent_supervisor.pool = original_pool
 
-    # 3. Mock Agent Network IO
-    # -----------------------
-    # Mock Session Init
-    session_route = respx.post("http://agent-r1:9001/apps/r1-agent/users/smart-task-scheduler/sessions").respond(201, json={"status": "created"})
-    # Mock /run endpoint
-    agent_route = respx.post("http://agent-r1:9001/run").respond(200, json={"status": "accepted"})
-    
-    # 4. First tick: Dispatch Logic
-    # ----------------------------
-    # Mock threading.Thread to run target synchronously for deterministic testing
-    with patch("src.task_execution.scheduler.threading.Thread") as mock_thread:
+
+def run_step():
+    with patch("src.scheduler.threading.Thread") as mock_thread:
         def sync_run(target, args=(), kwargs={}, daemon=True):
             target(*args, **kwargs)
             return MagicMock()
         mock_thread.side_effect = sync_run
+        run_system_bus_cycle()
+
+
+def q(sql, params=None):
+    return execute_query(sql, params) if params else execute_query(sql)
+
+
+def resource_available(res_id):
+    rows = q("SELECT is_available FROM resources WHERE id = %s", (res_id,))
+    return rows[0]['is_available'] if rows else None
+
+
+# ==============================================================================
+#  TESTS
+# ==============================================================================
+class TestResourceLifecycle:
+    """Verify resource state transitions during the bus cycle."""
+
+    @respx.mock
+    def test_resource_becomes_busy_on_dispatch(self, mock_agent_pool):
+        """When a task is dispatched, the resource must be marked as NOT available."""
+        execute_mutation("UPDATE tasks SET status = 'ready' WHERE id = 'TSK-READY-001'")
+        execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
         
-        # ACT: First Cycle
-        run_scheduler_tick()
-    
-    # VERIFY: Database state after dispatch
-    task_res = execute_query("SELECT status FROM tasks WHERE id = 'T1'")
-    assert task_res[0]['status'] == 'in_progress'
-    
-    res_res = execute_query("SELECT is_available FROM resources WHERE id = 'R1'")
-    assert res_res[0]['is_available'] is False
-    
-    # VERIFY: Network calls
-    assert session_route.called
-    assert agent_route.called
-    
-    # 5. Second tick: Reconciliation Logic
-    # ----------------------------------
-    # SIMULATE: Task finishes (e.g. by agent updating DB)
-    execute_mutation("UPDATE tasks SET status = 'code_done' WHERE id = 'T1'")
-    
-    # ACT: Second Cycle
-    run_scheduler_tick()
-    
-    # VERIFY: Database state after reconciliation
-    res_reconciled = execute_query("SELECT is_available FROM resources WHERE id = 'R1'")
-    assert res_reconciled[0]['is_available'] is True
-    
-    print(">>> Integration test test_full_pool_dispatch_and_reconcile PASSED on REAL DB.")
+        respx.post(url__regex=r".*coder3.*sessions$").respond(201)
+        respx.post(url__regex=r".*coder3.*/run$").respond(200, json={"status": "ok"})
+        
+        run_step()
+        assert resource_available('RES-CODER-003') is False
+
+    @respx.mock
+    def test_resource_released_on_completion(self, mock_agent_pool):
+        """When a task reaches a terminal status, the resource must be released."""
+        # RES-CODER-002 is busy with TSK-RUN-001 in seed data
+        assert resource_available('RES-CODER-002') is False
+        
+        execute_mutation("UPDATE tasks SET status = 'done' WHERE id = 'TSK-RUN-001'")
+        run_step()
+        assert resource_available('RES-CODER-002') is True
+
+    @respx.mock
+    def test_resource_released_on_failure(self, mock_agent_pool):
+        """Even on failure, the resource slot must be freed."""
+        execute_mutation("UPDATE tasks SET status = 'failed' WHERE id = 'TSK-RUN-001'")
+        run_step()
+        assert resource_available('RES-CODER-002') is True
+
+    @respx.mock
+    def test_resource_released_on_blocker(self, mock_agent_pool):
+        """Even on blocker, the resource slot must be freed."""
+        execute_mutation("UPDATE tasks SET status = 'blocked' WHERE id = 'TSK-RUN-001'")
+        run_step()
+        assert resource_available('RES-CODER-002') is True

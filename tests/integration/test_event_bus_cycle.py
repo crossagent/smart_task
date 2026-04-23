@@ -1,10 +1,10 @@
-﻿"""
+"""
 Event Bus Cycle Integration Test Suite.
 
-Tests the full 4-phase scheduler cycle (Detect 鈫?Consume 鈫?Execute 鈫?Reconcile)
+Tests the full 4-phase scheduler cycle (Detect -> Consume -> Execute -> Reconcile)
 against a REAL database with MOCKED agent dispatch.
 
-Seed data is loaded from tests/fixtures/test_slice.sql 鈥?a designed, repeatable
+Seed data is loaded from tests/fixtures/test_slice.sql -- a designed, repeatable
 test slice covering all major scenarios. See that file for the full data dictionary.
 """
 
@@ -14,13 +14,14 @@ import respx
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from src.task_execution.scheduler import run_system_bus_cycle
-from src.resource_management.supervisor import agent_supervisor
-from src.task_management.db import execute_query, execute_mutation, get_db_connection
+from src.scheduler import run_system_bus_cycle
+from src.supervisor import agent_supervisor
+from src.db import execute_query, execute_mutation, get_db_connection
 
 
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  FIXTURES
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+# ==============================================================================
+#  FIXTURES
+# ==============================================================================
 SLICE_SQL = Path(__file__).parent.parent / "fixtures" / "test_slice.sql"
 
 
@@ -28,7 +29,7 @@ SLICE_SQL = Path(__file__).parent.parent / "fixtures" / "test_slice.sql"
 def seed_test_slice(db_conn):
     """
     Load the test slice SQL before each test.
-    This is IDEMPOTENT 鈥?it cleans and re-seeds every time.
+    This is IDEMPOTENT -- it cleans and re-seeds every time.
     """
     sql = SLICE_SQL.read_text(encoding="utf-8")
     cur = db_conn.cursor()
@@ -36,7 +37,7 @@ def seed_test_slice(db_conn):
     db_conn.commit()
     cur.close()
     yield
-    # No cleanup needed 鈥?next test will re-seed
+    # No cleanup needed -- next test will re-seed
 
 
 @pytest.fixture
@@ -58,11 +59,12 @@ def mock_agent_pool():
     agent_supervisor.pool = original_pool
 
 
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  HELPERS
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+# ==============================================================================
+#  HELPERS
+# ==============================================================================
 def run_step():
     """Execute a single bus cycle with threading mocked to run synchronously."""
-    with patch("src.task_execution.scheduler.threading.Thread") as mock_thread:
+    with patch("src.scheduler.threading.Thread") as mock_thread:
         def sync_run(target, args=(), kwargs={}, daemon=True):
             target(*args, **kwargs)
             return MagicMock()
@@ -108,8 +110,9 @@ def count_events(status='pending'):
     return rows[0]['cnt']
 
 
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  PHASE 1: EVENT DETECTION
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+# ==============================================================================
+#  PHASE 1: EVENT DETECTION
+# ==============================================================================
 class TestEventDetection:
     """Verify the Detect phase emits correct events from the test slice."""
 
@@ -167,14 +170,15 @@ class TestEventDetection:
         assert evts[0]['activity_id'] == 'ACT-LIVE-001'
 
 
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  PHASE 2: EVENT CONSUMPTION
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+# ==============================================================================
+#  PHASE 2: EVENT CONSUMPTION
+# ==============================================================================
 class TestEventConsumption:
     """Verify events are consumed and translated into Task mutations."""
 
     @respx.mock
     def test_failed_task_creates_repair(self, mock_agent_pool):
-        """task_failed event for TSK-FAIL-001 鈫?creates REPAIR-TSK-FAIL-001."""
+        """task_failed event for TSK-FAIL-001 -> creates REPAIR-TSK-FAIL-001."""
         run_step()
         assert task_exists('REPAIR-TSK-FAIL-001')
         repair = q("SELECT * FROM tasks WHERE id = 'REPAIR-TSK-FAIL-001'")[0]
@@ -184,13 +188,13 @@ class TestEventConsumption:
 
     @respx.mock
     def test_blocked_task_creates_repair(self, mock_agent_pool):
-        """task_blocked event for TSK-BLOCK-001 鈫?creates REPAIR-TSK-BLOCK-001."""
+        """task_blocked event for TSK-BLOCK-001 -> creates REPAIR-TSK-BLOCK-001."""
         run_step()
         assert task_exists('REPAIR-TSK-BLOCK-001')
 
     @respx.mock
     def test_stalled_activity_creates_review_task(self, mock_agent_pool):
-        """activity_stalled event 鈫?creates REV-ACT-STALL-001."""
+        """activity_stalled event -> creates REV-ACT-STALL-001."""
         run_step()
         assert task_exists('REV-ACT-STALL-001')
         rev = q("SELECT * FROM tasks WHERE id = 'REV-ACT-STALL-001'")[0]
@@ -207,7 +211,7 @@ class TestEventConsumption:
 
     @respx.mock
     def test_human_instruction_creates_cmd_task(self, mock_agent_pool):
-        """Injected human_instruction event 鈫?creates CMD task."""
+        """Injected human_instruction event -> creates CMD task."""
         execute_mutation("""
             INSERT INTO events (event_type, source, severity, activity_id, payload)
             VALUES ('human_instruction', 'human', 'critical', 'ACT-LIVE-001',
@@ -221,41 +225,42 @@ class TestEventConsumption:
 
 
 
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  PHASE 3: DATA PLANE (Promote + Dispatch)
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+# ==============================================================================
+#  PHASE 3: DATA PLANE (Promote + Dispatch)
+# ==============================================================================
 class TestDataPlane:
     """Verify task promotion and agent dispatch."""
 
     @respx.mock
     def test_pending_no_dep_promoted(self, mock_agent_pool):
-        """TSK-PEND-002 (pending, no deps) 鈫?ready."""
+        """TSK-PEND-002 (pending, no deps) -> ready."""
         execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
         run_step()
         assert task_status('TSK-PEND-002') == 'ready'
 
     @respx.mock
     def test_pending_dep_met_promoted(self, mock_agent_pool):
-        """TSK-PEND-001 (pending, dep TSK-DONE-001 is done) 鈫?ready."""
+        """TSK-PEND-001 (pending, dep TSK-DONE-001 is done) -> ready."""
         execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
         run_step()
         assert task_status('TSK-PEND-001') == 'ready'
 
     @respx.mock
     def test_pending_dep_not_met_stays(self, mock_agent_pool):
-        """TSK-PEND-003 (pending, dep TSK-PEND-001 not done) 鈫?stays pending."""
+        """TSK-PEND-003 (pending, dep TSK-PEND-001 not done) -> stays pending."""
         run_step()
         assert task_status('TSK-PEND-003') == 'pending'
 
     @respx.mock
     def test_unapproved_goes_to_awaiting(self, mock_agent_pool):
-        """TSK-AWAIT-001 (pending, is_approved=false) 鈫?awaiting_approval."""
+        """TSK-AWAIT-001 (pending, is_approved=false) -> awaiting_approval."""
         execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
         run_step()
         assert task_status('TSK-AWAIT-001') == 'awaiting_approval'
 
     @respx.mock
     def test_ready_task_dispatched(self, mock_agent_pool):
-        """TSK-READY-001 (ready, RES-CODER-003 available) 鈫?in_progress."""
+        """TSK-READY-001 (ready, RES-CODER-003 available) -> in_progress."""
         # Manually set to ready since seed data is now pending
         execute_mutation("UPDATE tasks SET status = 'ready' WHERE id = 'TSK-READY-001'")
         execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
@@ -293,8 +298,9 @@ class TestDataPlane:
         assert int(sc[0]['value']) == 0
 
 
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  PHASE 4: RECONCILE
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+# ==============================================================================
+#  PHASE 4: RECONCILE
+# ==============================================================================
 class TestReconcile:
     """Verify resource release and event resolution."""
 
@@ -321,8 +327,9 @@ class TestReconcile:
         assert len(resolved) >= 1
 
 
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?#  MULTI-STEP SCENARIOS
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+# ==============================================================================
+#  MULTI-STEP SCENARIOS
+# ==============================================================================
 class TestMultiStep:
     """End-to-end scenarios across multiple bus cycles."""
 
@@ -331,14 +338,14 @@ class TestMultiStep:
         """
         3-step lifecycle:
         Step 1: Detect + Promote + Dispatch
-        Step 2: Simulate completions 鈫?Reconcile
+        Step 2: Simulate completions -> Reconcile
         Step 3: Freed resources pick up next tasks
         """
         respx.post(url__regex=r".*/sessions$").respond(201)
         respx.post(url__regex=r".*/run$").respond(200, json={"status": "ok"})
         execute_mutation("UPDATE system_state SET value = '\"auto\"' WHERE key = 'run_mode'")
 
-        # 鈹€鈹€ Step 1 鈹€鈹€
+        # Step 1
         run_step()
         assert task_status('TSK-PEND-001') == 'ready'       # dep met, promoted
         assert task_status('TSK-PEND-002') == 'ready'       # no dep, promoted
@@ -346,14 +353,14 @@ class TestMultiStep:
         assert task_status('TSK-READY-001') == 'in_progress' # dispatched
         assert task_exists('REPAIR-TSK-FAIL-001')           # detected + consumed
 
-        # 鈹€鈹€ Step 2: Agent finishes work 鈹€鈹€
+        # Step 2: Agent finishes work
         execute_mutation("UPDATE tasks SET status = 'done' WHERE id = 'TSK-RUN-001'")
         execute_mutation("UPDATE tasks SET status = 'done' WHERE id = 'TSK-READY-001'")
         run_step()
         assert resource_available('RES-CODER-002') is True
         assert resource_available('RES-CODER-003') is True
 
-        # 鈹€鈹€ Step 3: Freed resources allow new dispatch 鈹€鈹€
+        # Step 3: Freed resources allow new dispatch
         run_step()
         # At least one of the promoted tasks should now be dispatched
         statuses = [task_status('TSK-PEND-001'), task_status('TSK-PEND-002')]
@@ -363,7 +370,7 @@ class TestMultiStep:
     def test_chain_promotion(self, mock_agent_pool):
         """
         Verify chained dependencies resolve across cycles:
-        TSK-PEND-001 done 鈫?TSK-PEND-003 unlocked.
+        TSK-PEND-001 done -> TSK-PEND-003 unlocked.
         """
         respx.post(url__regex=r".*/sessions$").respond(201)
         respx.post(url__regex=r".*/run$").respond(200, json={"status": "ok"})
@@ -384,7 +391,7 @@ class TestMultiStep:
     @respx.mock
     def test_event_injection_from_agent(self, mock_agent_pool):
         """
-        Simulate an agent calling emit_event() tool 鈫?event consumed 鈫?repair task created.
+        Simulate an agent calling emit_event() tool -> event consumed -> repair task created.
         """
         respx.post(url__regex=r".*/sessions$").respond(201)
         respx.post(url__regex=r".*/run$").respond(200, json={"status": "ok"})
@@ -402,4 +409,3 @@ class TestMultiStep:
         assert task_exists('REPAIR-TSK-RUN-001')
         repair = q("SELECT * FROM tasks WHERE id = 'REPAIR-TSK-RUN-001'")[0]
         assert 'Git conflict' in repair['module_iteration_goal']
-

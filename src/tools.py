@@ -4,8 +4,8 @@ import logging
 from typing import Optional, Any
 from .db import execute_query, execute_mutation, CustomEncoder
 
-# Import the shared MCP singleton
-from ..shared.mcp_app import mcp
+# Import the shared MCP singleton from the same directory
+from .mcp_app import mcp
 
 logger = logging.getLogger("smart_task.task_management.tools")
 
@@ -450,14 +450,14 @@ def get_activity_schedule_report(activity_id: str) -> str:
         tasks = execute_query(tasks_query, (activity_id,))
  
         status_emoji = {
-            'pending': '⏳',
-            'ready': '✅',
-            'in_progress': '🏃',
-            'code_done': '🏗️',
-            'done': '✅',
-            'failed': '❌',
-            'blocked': '🚫',
-            'needs_human_help': '🆘'
+            'pending': '',
+            'ready': '',
+            'in_progress': '',
+            'code_done': '',
+            'done': '',
+            'failed': '',
+            'blocked': '',
+            'needs_human_help': ''
         }
  
         report = [f"# Activity: {act['name']} ({act['priority']})"]
@@ -476,13 +476,13 @@ def get_activity_schedule_report(activity_id: str) -> str:
         report.append(f"**Estimated Total Effort**: {total_hours} hours\n")
  
         for mod_name, m_tasks in modules_dict.items():
-            report.append(f"### 📦 Module: {mod_name}")
+            report.append(f"###  Module: {mod_name}")
             for t in m_tasks:
-                emoji = status_emoji.get(t['status'], '❓')
+                emoji = status_emoji.get(t['status'], '')
                 hrs = f"{t['estimated_hours']}h" if t['estimated_hours'] else "N/A"
                 report.append(f"- {emoji} **[{t['status'].upper()}]** {t['module_iteration_goal']} (ID: `{t['id']}`, ETA: {hrs})")
                 if t['blocker_reason'] and t['status'] in ['failed', 'blocked', 'needs_human_help']:
-                    report.append(f"  > **🚩 Blocker**: {t['blocker_reason']}")
+                    report.append(f"  > ** Blocker**: {t['blocker_reason']}")
             report.append("")
  
         return "\n".join(report)

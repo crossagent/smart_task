@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import subprocess
@@ -9,7 +9,7 @@ import time
 import httpx
 from dotenv import load_dotenv
 from typing import Optional, Dict, List, Any, Callable
-from src.task_management.db import execute_mutation
+from .db import execute_mutation
 
 logger = logging.getLogger("smart_task.resource_management.supervisor")
 
@@ -103,7 +103,6 @@ class AgentSupervisor:
 
         logger.info(f"Starting Local Agent {handle.agent_id} on port {handle.port}...")
         
-        # 鍑嗗鐜鍙橀噺
         env = os.environ.copy()
         if self.db_url:
             env["SESSION_SERVICE_URI"] = self.db_url
@@ -119,7 +118,7 @@ class AgentSupervisor:
         if handle.workspace:
             env["SMART_WORKSPACE_PATH"] = handle.workspace
 
-        # 鍛戒护锛歶v run adk api_server <dir> --port <port>
+        # uv run adk api_server <dir> --port <port>
         cmd = ["uv", "run", "adk", "api_server", handle.dir, "--port", str(handle.port)]
         
         try:
@@ -133,7 +132,7 @@ class AgentSupervisor:
             )
             handle.process = process
             
-            # 鏃ュ織鑱氬悎璁板綍锛堝紓姝ワ級
+            # Start log reader thread
             threading.Thread(target=self._log_reader, args=(handle,), daemon=True).start()
             
         except Exception as e:
@@ -150,7 +149,7 @@ class AgentSupervisor:
         """Continuously monitors health and restarts failed agents."""
         while not self._stop_event.is_set():
             self._reconcile_pool()
-            # 姣?10 绉掓鏌ヤ竴娆?            time.sleep(10)
+            time.sleep(10)
 
     def _reconcile_pool(self):
         """Internal logic to check health and trigger restarts."""
