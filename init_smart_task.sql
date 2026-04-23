@@ -1,21 +1,18 @@
--- PostgreSQL Initialization Script for Smart Task Hub
+-- ==============================================================================
+--  SMART TASK HUB - REFINED SCHEMA (Module-Centric & Decoupled Execution)
+-- ==============================================================================
 
--- Note: In PostgreSQL Docker initialization (/docker-entrypoint-initdb.d/), 
--- the database `smart_task_hub` is generally created by the POSTGRES_DB env var.
--- If running manually, ensure you create the DB first and connect to it:
--- CREATE DATABASE smart_task_hub;
--- \c smart_task_hub
-
--- 1. DROP EXISTING TABLES (Reverse FK order)
+-- 0. CLEANUP (Reverse FK order)
+DROP TABLE IF EXISTS events CASCADE;
 DROP TABLE IF EXISTS system_state CASCADE;
-DROP TABLE IF EXISTS activity_collaborators CASCADE;
+DROP TABLE IF EXISTS task_assignments CASCADE;
 DROP TABLE IF EXISTS tasks CASCADE;
 DROP TABLE IF EXISTS modules CASCADE;
 DROP TABLE IF EXISTS activities CASCADE;
 DROP TABLE IF EXISTS projects CASCADE;
 DROP TABLE IF EXISTS resources CASCADE;
 
--- 2. Trigger Function to Handle `updated_at` automatically
+-- 1. UTILITIES
 CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -24,223 +21,138 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- 3. Resource Table - '执行人' (Bandwidth/Personnel)
-CREATE TABLE IF NOT EXISTS resources (
-    id VARCHAR(50) PRIMARY KEY, -- RES-YYYYMMDD-XXXX
+-- 2. RESOURCES (Compute Slots / Agent Identities)
+-- Represents WHO can do work.
+CREATE TABLE resources (
+    id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    resource_type VARCHAR(50) DEFAULT 'human', -- human | activity_manager | coder
-    agent_dir VARCHAR(255) DEFAULT NULL,
-    workspace_path VARCHAR(255) DEFAULT NULL,
-    is_available BOOLEAN DEFAULT true,
-    dingtalk_id VARCHAR(100) DEFAULT NULL,
-    professional_skill VARCHAR(255) DEFAULT NULL, -- 程序 | 策划 | 运营 | 美术
-    org_role VARCHAR(255) NOT NULL, -- 引擎组组长, 制作人, etc.
-    weekly_capacity INT DEFAULT 40,
-    status VARCHAR(50) DEFAULT 'Available',
+    resource_type VARCHAR(50) DEFAULT 'human', -- human | agent
+    org_role VARCHAR(255) NOT NULL,            -- e.g., Senior Architect, Coder
+    is_available BOOLEAN DEFAULT TRUE,
+    status VARCHAR(50) DEFAULT 'Available',    -- Available | Busy | Away
+    dingtalk_id VARCHAR(100),
+    professional_skill VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO resources (id, name, org_role, workspace_path, is_available, resource_type) 
-VALUES ('RES-ARCHITECT-001', 'System Architect', 'Control Plane', '/app', True, 'activity_manager');
-COMMENT ON TABLE resources IS 'Bandwidth / Personnel / 执行人 / Agent Slot';
-COMMENT ON COLUMN resources.id IS 'RES-YYYYMMDD-XXXX';
-COMMENT ON COLUMN resources.status IS 'Available | Busy | Away | Archived';
 
--- 4. Project Table - '战略项目池' (Inbox / Project Root)
-CREATE SCHEMA IF NOT EXISTS adk;
-GRANT ALL ON SCHEMA adk TO smart_user;
-
-CREATE TABLE IF NOT EXISTS projects (
-    id VARCHAR(50) PRIMARY KEY, -- PRJ-YYYYMMDD-XXXX
+-- 3. PROJECTS (Strategic Containers)
+-- Represents the "Why" and "When".
+CREATE TABLE projects (
+    id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    status VARCHAR(50) DEFAULT 'Planning',
+    status VARCHAR(50) DEFAULT 'Planning',    -- Planning | Active | Done
     initiator_res_id VARCHAR(50) NOT NULL REFERENCES resources(id),
-    receiver_res_id VARCHAR(50) DEFAULT NULL REFERENCES resources(id),
-    deadline DATE DEFAULT NULL,
+    receiver_res_id VARCHAR(50) REFERENCES resources(id),
+    deadline DATE,
     memo_content TEXT NOT NULL,
-    ai_summary TEXT DEFAULT NULL,
+    ai_summary TEXT,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-COMMENT ON TABLE projects IS 'Inbox / Project Root / 战略项目池';
-COMMENT ON COLUMN projects.id IS 'PRJ-YYYYMMDD-XXXX';
-COMMENT ON COLUMN projects.status IS 'Planning | Active | Done | Archived';
 
--- 5. Activity Table - '执行活动/项目' (Execution Path/Strategy)
-CREATE TABLE IF NOT EXISTS activities (
-    id VARCHAR(50) PRIMARY KEY, -- ACT-YYYYMMDD-XXXX
+-- 4. ACTIVITIES (Execution Strategies)
+-- Represents the "How" (The roadmap within a project).
+CREATE TABLE activities (
+    id VARCHAR(50) PRIMARY KEY,
+    project_id VARCHAR(50) REFERENCES projects(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
-    project_id VARCHAR(50) DEFAULT NULL REFERENCES projects(id),
     owner_res_id VARCHAR(50) NOT NULL REFERENCES resources(id),
-    deadline DATE DEFAULT NULL,
-    benefit TEXT,
+    status VARCHAR(50) DEFAULT 'Active',
     priority VARCHAR(10) DEFAULT 'P1',
-    artifact_url TEXT DEFAULT NULL,
-    user_instruction TEXT DEFAULT NULL,
-    instruction_version INT DEFAULT 0,
-    status VARCHAR(50) DEFAULT 'Active',
+    benefit TEXT,
+    deadline DATE,
+    artifact TEXT,                             -- Final deliverable for the activity
+    user_instruction TEXT,
+    instruction_version INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-COMMENT ON TABLE activities IS 'Execution Path / Strategy / 执行活动';
-COMMENT ON COLUMN activities.id IS 'ACT-YYYYMMDD-XXXX';
-COMMENT ON COLUMN activities.priority IS 'P0 | P1 | P2';
-COMMENT ON COLUMN activities.status IS 'Active | Done | Archived';
 
--- 6. Module Table - '物理实体' (Physical Asset/Knowledge Domain / Component Tree)
-CREATE TABLE IF NOT EXISTS modules (
-    id VARCHAR(50) PRIMARY KEY, -- MOD-YYYYMMDD-XXXX
+-- 5. MODULES (Physical Entities)
+-- Represents the "What" (The actual code/docs/assets).
+-- Independent of specific projects.
+CREATE TABLE modules (
+    id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    parent_module_id VARCHAR(50) DEFAULT NULL REFERENCES modules(id) ON DELETE SET NULL,
     owner_res_id VARCHAR(50) NOT NULL REFERENCES resources(id),
-    knowledge_base TEXT DEFAULT NULL,
-    layer_type VARCHAR(100) DEFAULT NULL, -- L1-Domain | L2-Service | L3-Component
-    entity_type VARCHAR(100) DEFAULT 'Code', -- Code | Document | Asset | Other
+    parent_module_id VARCHAR(50) REFERENCES modules(id) ON DELETE SET NULL,
+    local_path TEXT,                           -- The "work_slot" / Folder path
+    repo_url TEXT,                             -- Repository link
+    knowledge_base TEXT,
+    layer_type VARCHAR(100),                   -- L1-Domain | L2-Service | L3-Component
+    entity_type VARCHAR(100) DEFAULT 'Code',   -- Code | Document | Asset
     status VARCHAR(50) DEFAULT 'Active',
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-COMMENT ON TABLE modules IS 'Physical Asset / Component Tree / 物理实体';
-COMMENT ON COLUMN modules.id IS 'MOD-YYYYMMDD-XXXX';
-COMMENT ON COLUMN modules.parent_module_id IS 'Ref to parent Module UUID to form a spatial tree component';
-COMMENT ON COLUMN modules.layer_type IS 'Hierarchy scale: L1-Domain | L2-Service | L3-Component';
-COMMENT ON COLUMN modules.entity_type IS 'Nature of entity: Code | Document | Asset | Other';
-COMMENT ON COLUMN modules.status IS 'Active | Deprecated';
 
--- 7. Task Table - '最小执行粒子' (Atomic Participant)
-CREATE TABLE IF NOT EXISTS tasks (
-    id VARCHAR(50) PRIMARY KEY, -- TSK-YYYYMMDD-XXXX
-    project_id VARCHAR(50) DEFAULT NULL REFERENCES projects(id),
-    activity_id VARCHAR(50) DEFAULT NULL REFERENCES activities(id),
-    module_id VARCHAR(50) NOT NULL REFERENCES modules(id),
-    resource_id VARCHAR(50) NOT NULL REFERENCES resources(id),
-    module_iteration_goal TEXT NOT NULL,
-    estimated_hours DECIMAL(10,2) DEFAULT NULL,
-    execution_result TEXT DEFAULT NULL,
-    status VARCHAR(50) DEFAULT 'pending',
+-- 6. TASKS (Actionable State Mutations)
+-- Represents the "Step" (Moving a module to a new state).
+CREATE TABLE tasks (
+    id VARCHAR(50) PRIMARY KEY,
+    project_id VARCHAR(50) REFERENCES projects(id) ON DELETE CASCADE,
+    activity_id VARCHAR(50) REFERENCES activities(id) ON DELETE CASCADE,
+    module_id VARCHAR(50) NOT NULL REFERENCES modules(id) ON DELETE CASCADE,
+    module_iteration_goal TEXT NOT NULL,       -- The "Soul" of the task
+    status VARCHAR(50) DEFAULT 'pending',      -- pending | ready | in_progress | done | failed | blocked
     is_approved BOOLEAN DEFAULT TRUE,
-    depends_on VARCHAR(50)[] DEFAULT '{}',
-    start_date DATE DEFAULT NULL,
-    due_date DATE DEFAULT NULL,
-    artifact_url TEXT DEFAULT NULL,
-    redmine_id VARCHAR(50) DEFAULT NULL,
-    blocker_reason TEXT DEFAULT NULL,
-    retry_count INT DEFAULT 0,
+    depends_on VARCHAR(50)[] DEFAULT '{}',     -- DAG dependencies
+    estimated_hours DECIMAL(10,2),
+    execution_result TEXT,
+    artifact TEXT,                             -- The specific output of this task
+    blocker_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-COMMENT ON TABLE tasks IS 'Atomic Participant / 最小执行粒子';
-COMMENT ON COLUMN tasks.id IS 'TSK-YYYYMMDD-XXXX';
-COMMENT ON COLUMN tasks.module_iteration_goal IS 'Atomic work target (The "Soul" of the task)';
-COMMENT ON COLUMN tasks.estimated_hours IS 'Effort estimation (Execution level input - Hours)';
-COMMENT ON COLUMN tasks.status IS 'pending | ready | in_progress | code_done | done | failed | blocked | needs_human_help';
-COMMENT ON COLUMN tasks.depends_on IS 'Array of preceding Task IDs (Native DAG Topological structure)';
-COMMENT ON COLUMN tasks.start_date IS 'Planned start date (Scheduling level input)';
-COMMENT ON COLUMN tasks.due_date IS 'Target deadline (Scheduling level input)';
-COMMENT ON COLUMN tasks.artifact_url IS 'URL to the deliverable artifact (Doc/Asset/Repo)';
-COMMENT ON COLUMN tasks.blocker_reason IS 'Reason why the task failed or is blocked';
-COMMENT ON COLUMN tasks.retry_count IS 'Number of times the task was auto-retried';
 
--- 7.5 Dynamic Progress Views (SQL Inference instead of static columns)
-CREATE OR REPLACE VIEW v_module_progress AS
-SELECT 
-    module_id,
-    COUNT(id) as total_tasks,
-    COUNT(CASE WHEN status IN ('done', 'code_done') THEN 1 END) as completed_tasks,
-    ROUND(
-        CASE WHEN COUNT(id) = 0 THEN 0 
-        ELSE (COUNT(CASE WHEN status IN ('done', 'code_done') THEN 1 END)::NUMERIC / COUNT(id) * 100) 
-        END, 2
-    ) as completion_percentage
-FROM tasks
-GROUP BY module_id;
-
-CREATE OR REPLACE VIEW v_activity_progress AS
-SELECT 
-    activity_id,
-    COUNT(id) as total_tasks,
-    COUNT(CASE WHEN status IN ('done', 'code_done') THEN 1 END) as completed_tasks,
-    ROUND(
-        CASE WHEN COUNT(id) = 0 THEN 0 
-        ELSE (COUNT(CASE WHEN status IN ('done', 'code_done') THEN 1 END)::NUMERIC / COUNT(id) * 100) 
-        END, 2
-    ) as completion_percentage
-FROM tasks
-WHERE activity_id IS NOT NULL
-GROUP BY activity_id;
-
--- 8. Activity Collaborators Table - '访问控制' (Access Control)
-CREATE TABLE IF NOT EXISTS activity_collaborators (
-    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    activity_id VARCHAR(50) NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+-- 7. TASK_ASSIGNMENTS (Execution Records / Man-hour tracking)
+-- Represents the "Execution" (Linking a task to a resource over time).
+CREATE TABLE task_assignments (
+    id SERIAL PRIMARY KEY,
+    task_id VARCHAR(50) NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     resource_id VARCHAR(50) NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(activity_id, resource_id)
+    assigned_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMPTZ,
+    status VARCHAR(50) DEFAULT 'active',       -- active | completed | failed | abandoned
+    man_hours DECIMAL(10,2) DEFAULT 0,
+    memo TEXT                                  -- Notes from the execution session
 );
-COMMENT ON TABLE activity_collaborators IS 'Activity Access Control (who can manage Tasks under this Activity)';
 
--- 8.5 System State Table - '控制总线状态' (Control Plane State)
-CREATE TABLE IF NOT EXISTS system_state (
+-- 8. SYSTEM STATE (Control Flags)
+CREATE TABLE system_state (
     key VARCHAR(255) PRIMARY KEY,
     value JSONB NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-COMMENT ON TABLE system_state IS 'Global control state (run_mode, step_count, etc.)';
+
+-- 9. EVENTS (System Event Bus)
+CREATE TABLE events (
+    id SERIAL PRIMARY KEY,
+    event_type VARCHAR(50) NOT NULL,
+    source VARCHAR(100) NOT NULL,
+    severity VARCHAR(10) DEFAULT 'normal',
+    project_id VARCHAR(50) REFERENCES projects(id),
+    activity_id VARCHAR(50) REFERENCES activities(id),
+    task_id VARCHAR(50),
+    resource_id VARCHAR(50) REFERENCES resources(id),
+    payload JSONB NOT NULL DEFAULT '{}',
+    status VARCHAR(20) DEFAULT 'pending',
+    resolved_by VARCHAR(50),                   -- Task ID that resolved this event
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMPTZ
+);
+
+-- 10. TRIGGERS
+CREATE TRIGGER update_resources_modtime BEFORE UPDATE ON resources FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER update_projects_modtime BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER update_activities_modtime BEFORE UPDATE ON activities FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER update_modules_modtime BEFORE UPDATE ON modules FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER update_tasks_modtime BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+-- DEFAULT DATA
+INSERT INTO resources (id, name, org_role, is_available, resource_type) 
+VALUES ('RES-ARCHITECT-001', 'System Architect', 'Control Plane', TRUE, 'agent');
 
 INSERT INTO system_state (key, value) VALUES ('run_mode', '"auto"');
 INSERT INTO system_state (key, value) VALUES ('step_count', '0');
-
--- 9. Events Table - '系统事件/中断信号' (System Event Bus)
-CREATE TABLE IF NOT EXISTS events (
-    id          SERIAL PRIMARY KEY,
-    event_type  VARCHAR(50) NOT NULL,          -- task_blocked | task_failed | human_instruction | activity_stalled | ...
-    source      VARCHAR(100) NOT NULL,         -- scheduler | human | agent:<resource_id>
-    severity    VARCHAR(10) DEFAULT 'normal',  -- normal | warning | critical
-
-    -- Associated context (all optional, depends on event_type)
-    activity_id VARCHAR(50) DEFAULT NULL REFERENCES activities(id),
-    task_id     VARCHAR(50) DEFAULT NULL,      -- No FK: event may reference tasks that don't exist yet
-    resource_id VARCHAR(50) DEFAULT NULL REFERENCES resources(id),
-
-    -- Event payload
-    payload     JSONB NOT NULL DEFAULT '{}',   -- Flexible event data
-
-    -- Lifecycle
-    status      VARCHAR(20) DEFAULT 'pending', -- pending | processing | resolved | dismissed
-    resolved_by VARCHAR(100) DEFAULT NULL,     -- Who/what resolved this event (task_id or human)
-
-    created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMPTZ DEFAULT NULL
-);
-
--- Efficient query for pending events (the hot path in every bus cycle)
-CREATE INDEX idx_events_pending ON events (status, severity, created_at)
-    WHERE status = 'pending';
-
--- Deduplication: prevent duplicate pending events for the same task
-CREATE UNIQUE INDEX idx_events_dedup ON events (event_type, task_id)
-    WHERE status = 'pending' AND task_id IS NOT NULL;
-
-COMMENT ON TABLE events IS 'System Event Bus / 系统事件信号表 - Signals that trigger Task mutations';
-COMMENT ON COLUMN events.event_type IS 'Event category: task_blocked | task_failed | human_instruction | activity_stalled | agent_timeout | custom';
-COMMENT ON COLUMN events.source IS 'Origin: scheduler | human | agent:<resource_id>';
-COMMENT ON COLUMN events.severity IS 'Priority: normal | warning | critical';
-COMMENT ON COLUMN events.status IS 'Lifecycle: pending | processing | resolved | dismissed';
-COMMENT ON COLUMN events.resolved_by IS 'The task_id or actor that handled this event';
-
--- 10. Apply Triggers for `updated_at` functionality
-DROP TRIGGER IF EXISTS update_resources_modtime ON resources;
-CREATE TRIGGER update_resources_modtime BEFORE UPDATE ON resources FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-DROP TRIGGER IF EXISTS update_projects_modtime ON projects;
-CREATE TRIGGER update_projects_modtime BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-DROP TRIGGER IF EXISTS update_activities_modtime ON activities;
-CREATE TRIGGER update_activities_modtime BEFORE UPDATE ON activities FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-DROP TRIGGER IF EXISTS update_modules_modtime ON modules;
-CREATE TRIGGER update_modules_modtime BEFORE UPDATE ON modules FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-DROP TRIGGER IF EXISTS update_tasks_modtime ON tasks;
-CREATE TRIGGER update_tasks_modtime BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_modified_column();

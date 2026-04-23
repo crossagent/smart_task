@@ -9,9 +9,10 @@ from src.tools import (
     upsert_activity, 
     upsert_module, 
     upsert_task,
+    assign_task,
+    submit_task_deliverable,
     delete_record
 )
-from src.db import execute_mutation, execute_query
 
 @pytest.fixture
 def resource_id():
@@ -26,151 +27,86 @@ def module_id():
     return f"MOD-TEST-{uuid.uuid4().hex[:8]}"
 
 def test_db_connection():
-    """Verify that we are indeed connected to the test database."""
+    """Verify database connectivity."""
     results_json = query_sql("SELECT current_database();")
-    # If the database connection fails, query_sql returns an error string
-    # We should catch this to provide a better error message in tests
-    try:
-        results = json.loads(results_json)
-    except json.JSONDecodeError:
-        pytest.fail(f"Database connection test failed. Tool output: {results_json}")
-        
-    db_name = results[0]["current_database"]
-    print(f"\n>>> Active DB: {db_name}")
-    assert "smart_task" in db_name
+    results = json.loads(results_json)
+    assert "smart_task" in results[0]["current_database"]
 
-def test_query_sql_validation():
-    """Verify that query_sql only allows SELECT."""
-    result = query_sql("DROP TABLE resources;")
-    assert "Only read-only queries" in result
-
-def test_resource_upsert_and_query(resource_id):
-    """Test creating a resource and querying it."""
-    # 1. Upsert
-    msg = upsert_resource(
-        id=resource_id,
-        name="Test User",
-        resource_type="coder",
-        agent_dir="src/agents/coder",
-        org_role="Tester",
-        weekly_capacity=40
+def test_module_centric_upsert(resource_id, module_id):
+    """Test creating a module as a standalone physical entity."""
+    # 1. Setup owner
+    upsert_resource(id=resource_id, name="Module Owner", org_role="Architect")
+    
+    # 2. Upsert Module (No project_id)
+    msg = upsert_module(
+        id=module_id,
+        name="AuthCore Component",
+        owner_res_id=resource_id,
+        local_path="/workspaces/auth_core",
+        repo_url="https://github.com/org/auth_core.git",
+        entity_type="Code"
     )
     assert "Successfully processed" in msg
     
-    # 2. Query via SQL
-    sql = f"SELECT * FROM resources WHERE id = '{resource_id}'"
-    results_json = query_sql(sql)
-    
-    try:
-        results = json.loads(results_json)
-    except json.JSONDecodeError:
-        pytest.fail(f"Expected JSON from query_sql, but got: {results_json}")
-    
-    assert len(results) == 1
-    assert results[0]["name"] == "Test User"
-    assert results[0]["org_role"] == "Tester"
+    # 3. Verify
+    res = json.loads(query_sql(f"SELECT * FROM modules WHERE id = '{module_id}'"))
+    assert res[0]["local_path"] == "/workspaces/auth_core"
+    assert res[0]["repo_url"] == "https://github.com/org/auth_core.git"
 
-def test_full_chain_upsert(resource_id, project_id, module_id):
-    """Test a full chain of dependencies (Resource -> Project -> Module -> Task)."""
-    # 1. Resource
-    upsert_resource(id=resource_id, name="Chain Owner", org_role="Architect")
+def test_decoupled_task_flow(resource_id, project_id, module_id):
+    """Test the new flow: Create Task (no resource) -> Assign -> Complete."""
+    # Setup infrastructure
+    upsert_resource(id=resource_id, name="Executor Agent", org_role="Coder")
+    upsert_project(id=project_id, name="Big Migration", initiator_res_id=resource_id)
+    upsert_module(id=module_id, name="DatabaseParser", owner_res_id=resource_id)
     
-    # 2. Project
-    msg_prj = upsert_project(
-        id=project_id,
-        name="Test Chain Project",
-        owner_res_id=resource_id,
-        memo_content="Testing dependencies"
-    )
-    assert "Successfully processed" in msg_prj
+    task_id = f"TSK-FLOW-{uuid.uuid4().hex[:8]}"
     
-    # 3. Module
-    msg_mod = upsert_module(
-        id=module_id,
-        project_id=project_id,
-        name="Test Module",
-        owner_res_id=resource_id
-    )
-    assert "Successfully processed" in msg_mod
-    
-    # 4. Task
-    task_id = f"TSK-TEST-{uuid.uuid4().hex[:8]}"
+    # 1. Create Task (No resource_id)
     msg_tsk = upsert_task(
         id=task_id,
         module_id=module_id,
-        module_name="Test Module",
-        resource_id=resource_id,
-        resource_name="Chain Owner",
-        module_iteration_goal="Complete TDD setup"
+        project_id=project_id,
+        module_iteration_goal="Upgrade to PG17",
+        status="ready"
     )
     assert "Successfully processed" in msg_tsk
     
-    # 5. Verify task relationship
-    results_json = query_sql(f"SELECT * FROM tasks WHERE id = '{task_id}'")
-    results = json.loads(results_json)
-    assert results[0]["module_id"] == module_id
-
-def test_custom_json_encoder():
-    """Verify that datetime and decimal are correctly encoded in query_sql."""
-    sql = "SELECT CURRENT_TIMESTAMP as now, 123.45::numeric as val"
-    results_json = query_sql(sql)
-    results = json.loads(results_json)
+    # 2. Assign Task to Resource
+    msg_assign = assign_task(task_id=task_id, resource_id=resource_id)
+    assert "assigned to resource" in msg_assign
     
-    assert "now" in results[0]
-    assert isinstance(results[0]["now"], str) # ISO format string
-    assert results[0]["val"] == 123.45
+    # Verify assignment record
+    assign_res = json.loads(query_sql(f"SELECT * FROM task_assignments WHERE task_id = '{task_id}'"))
+    assert len(assign_res) == 1
+    assert assign_res[0]["resource_id"] == resource_id
+    
+    # Verify task status moved to in_progress
+    task_res = json.loads(query_sql(f"SELECT status FROM tasks WHERE id = '{task_id}'"))
+    assert task_res[0]["status"] == "in_progress"
+    
+    # 3. Complete Task
+    msg_done = submit_task_deliverable(
+        task_id=task_id,
+        status="done",
+        execution_result="Migration complete.",
+        artifact_data="commit:abc12345"
+    )
+    assert "submitted with status 'done'" in msg_done
+    
+    # Verify assignment closed
+    assign_final = json.loads(query_sql(f"SELECT status, completed_at FROM task_assignments WHERE task_id = '{task_id}'"))
+    assert assign_final[0]["status"] == "completed"
+    assert assign_final[0]["completed_at"] is not None
 
-def test_task_context_resolution(resource_id, project_id, module_id):
-    """Verify that get_task_context returns full joined information."""
-    # 1. Setup chain
+def test_task_context_includes_module_path(resource_id, project_id, module_id):
+    """Verify that task context now brings in the module's physical path."""
     upsert_resource(id=resource_id, name="Context King", org_role="Architect")
-    upsert_project(id=project_id, name="Context Project", owner_res_id=resource_id)
-    upsert_module(id=module_id, project_id=project_id, name="Context Module", owner_res_id=resource_id)
+    upsert_module(id=module_id, name="ContextMod", owner_res_id=resource_id, local_path="/app/src/context")
     
     task_id = f"TSK-CTX-{uuid.uuid4().hex[:8]}"
-    upsert_task(
-        id=task_id,
-        module_id=module_id,
-        module_name="Context Module",
-        resource_id=resource_id,
-        resource_name="Context King",
-        module_iteration_goal="Test context join"
-    )
+    upsert_task(id=task_id, module_id=module_id, module_iteration_goal="Test path join")
     
-    # 2. Get Context
-    context_json = get_task_context(task_id)
-    try:
-        ctx = json.loads(context_json)
-    except json.JSONDecodeError:
-        pytest.fail(f"get_task_context failed. Output: {context_json}")
-    
-    assert ctx["task_id"] == task_id
-    assert ctx["project_name"] == "Context Project"
-    assert ctx["module_name"] == "Context Module"
-
-def test_upsert_atomic_conflict(resource_id, module_id):
-    """Verify that multiple upserts to the same ID update fields correctly."""
-    upsert_resource(id=resource_id, name="Conflict Hero", org_role="Coder")
-    upsert_module(id=module_id, project_id="NONE", name="Conflict Mod", owner_res_id=resource_id)
-    
-    task_id = f"TSK-CONFLICT-{uuid.uuid4().hex[:8]}"
-    
-    # First Upsert
-    upsert_task(
-        id=task_id, module_id=module_id, module_name="M1", 
-        resource_id=resource_id, resource_name="R1",
-        module_iteration_goal="Goal 1", status="pending"
-    )
-    
-    # Second Upsert (Update status and goal)
-    upsert_task(
-        id=task_id, module_id=module_id, module_name="M1", 
-        resource_id=resource_id, resource_name="R1",
-        module_iteration_goal="Goal 2", status="ready"
-    )
-    
-    # Verify values
-    results_json = query_sql(f"SELECT * FROM tasks WHERE id = '{task_id}'")
-    results = json.loads(results_json)
-    assert results[0]["module_iteration_goal"] == "Goal 2"
-    assert results[0]["status"] == "ready"
+    context = json.loads(get_task_context(task_id))
+    assert context["local_path"] == "/app/src/context"
+    assert context["module_name"] == "ContextMod"

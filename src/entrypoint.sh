@@ -19,6 +19,11 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
     su postgres -c "initdb -D $PGDATA"
 fi
 
+# Ensure pg_hba.conf allows all connections (necessary for host-to-container testing)
+echo "host all all 0.0.0.0/0 trust" >> "$PGDATA/pg_hba.conf"
+# Also ensure postgresql.conf listens on all addresses
+echo "listen_addresses = '*'" >> "$PGDATA/postgresql.conf"
+
 echo "Starting PostgreSQL 17 service..."
 # Use pg_ctl to start in background, but log to stdout for visibility if needed
 su postgres -c "pg_ctl -D $PGDATA -l /var/log/postgresql/postgresql.log start"

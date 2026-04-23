@@ -1,116 +1,62 @@
 -- ==============================================================================
---  TEST SLICE SEED DATA
---  A designed, repeatable test slice covering:
---    - Chained task dependencies
---    - Multiple activities (Healthy vs Stalled)
---    - Resource locking / release
---    - Pause/Step gating
+--  TEST SLICE - REFINED (Module-Centric Schema)
+--  Idempotent seed data for Integration Tests
 -- ==============================================================================
 
--- 0. CLEAN SLATE (reverse FK order)
-DELETE FROM events;
-DELETE FROM system_state;
-DELETE FROM activity_collaborators;
-DELETE FROM tasks;
-DELETE FROM modules;
-DELETE FROM activities;
-DELETE FROM projects;
-DELETE FROM resources;
+-- 1. CLEANUP
+TRUNCATE task_assignments, events, tasks, modules, activities, projects, resources, system_state CASCADE;
 
--- ==============================================================================
---  1. RESOURCES (Agent Slots)
--- ==============================================================================
---  PM slot:      RES-ARCHITECT-001 - Control Plane / Activity Manager
-INSERT INTO resources (id, name, org_role, resource_type, is_available) 
-VALUES ('RES-ARCHITECT-001', 'Senior Architect PM', 'pm', 'agent', TRUE);
+-- 2. RESOURCES
+INSERT INTO resources (id, name, org_role, is_available, resource_type) VALUES
+('RES-ARCHITECT-001', 'System Architect', 'Control Plane', TRUE,  'agent'),
+('RES-CODER-001',     'Coder One',        'Coder',         TRUE,  'human'),
+('RES-CODER-002',     'Bob Coder',        'Coder',         TRUE,  'human'),
+('RES-CODER-003',     'Coder Three',      'Coder',         TRUE,  'human'),
+('RES-CODER-004',     'Dave Coder',       'Coder',         TRUE,  'human');
 
---  Coder slots:
-INSERT INTO resources (id, name, org_role, resource_type, is_available) 
-VALUES ('RES-CODER-001', 'Coder Alpha', 'developer', 'agent', TRUE);
+-- 3. MODULES (Physical Entities)
+INSERT INTO modules (id, name, owner_res_id, local_path, repo_url, entity_type) VALUES
+('MOD-ROOT',      'System Root',   'RES-ARCHITECT-001', '/app',           'git://hub.local/root',    'Code'),
+('MOD-AUTH',      'Auth Service',  'RES-CODER-001',     '/app/src/auth',  'git://hub.local/auth',    'Code'),
+('MOD-DB',        'DB Layer',      'RES-CODER-002',     '/app/src/db',    'git://hub.local/db',      'Code'),
+('MOD-UI',        'Frontend UI',   'RES-CODER-003',     '/app/src/ui',    'git://hub.local/ui',      'Code'),
+('MOD-DOCS',      'System Docs',   'RES-ARCHITECT-001', '/app/docs',      'git://hub.local/docs',    'Document');
 
-INSERT INTO resources (id, name, org_role, resource_type, is_available) 
-VALUES ('RES-CODER-002', 'Coder Beta', 'developer', 'agent', FALSE); -- Busy with TSK-RUN-001
+-- 4. PROJECTS
+INSERT INTO projects (id, name, initiator_res_id, memo_content, status) VALUES
+('PRJ-LIVE-001',  'Production Migration', 'RES-ARCHITECT-001', 'Migrate all services to PG17', 'Active'),
+('PRJ-TEST-001',  'Integration Testing',  'RES-ARCHITECT-001', 'Test the event bus cycle',    'Active');
 
-INSERT INTO resources (id, name, org_role, resource_type, is_available) 
-VALUES ('RES-CODER-003', 'Coder Gamma', 'developer', 'agent', TRUE);
+-- 5. ACTIVITIES
+INSERT INTO activities (id, project_id, name, owner_res_id, status) VALUES
+('ACT-LIVE-001',  'PRJ-LIVE-001', 'Phase 1: Auth Migration', 'RES-ARCHITECT-001', 'Active'),
+('ACT-STALL-001', 'PRJ-TEST-001', 'Stalled Activity',        'RES-ARCHITECT-001', 'Active');
 
+-- 6. TASKS
+INSERT INTO tasks (id, project_id, activity_id, module_id, module_iteration_goal, status, is_approved) VALUES
+-- Terminal States
+('TSK-DONE-001',  'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-DB',   'Setup DB Schema',   'done',      TRUE),
+('TSK-FAIL-001',  'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-AUTH', 'Init Auth Config',  'failed',    TRUE),
+('TSK-BLOCK-001', 'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-UI',   'Design Login UI',   'blocked',   TRUE),
 
--- ==============================================================================
---  2. SYSTEM STATE
--- ==============================================================================
-INSERT INTO system_state (key, value) VALUES ('run_mode', '"auto"');
-INSERT INTO system_state (key, value) VALUES ('step_count', '0');
+-- Pending / Ready States
+('TSK-PEND-001',  'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-AUTH', 'Implement OAuth2',  'pending',   TRUE),
+('TSK-PEND-002',  'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-DOCS', 'Write API Docs',    'pending',   TRUE),
+('TSK-AWAIT-001', 'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-UI',   'Build Dashboard',   'pending',   FALSE),
+('TSK-READY-001', 'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-UI',   'Fix CSS Bugs',      'ready',     TRUE),
 
+-- In-Progress (Running)
+('TSK-RUN-001',   'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-DB',   'Optimize Queries',  'in_progress', TRUE);
 
--- ==============================================================================
---  3. PROJECTS & ACTIVITIES
--- ==============================================================================
+-- Set dependencies
+UPDATE tasks SET depends_on = '{TSK-DONE-001}' WHERE id = 'TSK-PEND-001';
+UPDATE tasks SET depends_on = '{TSK-PEND-001}' WHERE id = 'TSK-PEND-003'; -- TSK-PEND-003 not in seed, skip
 
--- Project A: Active development
-INSERT INTO projects (id, name, owner_res_id, status) 
-VALUES ('PRJ-ACTIVE-001', 'Auth Service Refactor', 'RES-ARCHITECT-001', 'in_progress');
+-- 7. ASSIGNMENTS
+INSERT INTO task_assignments (task_id, resource_id, status) VALUES
+('TSK-RUN-001', 'RES-CODER-002', 'active');
 
-INSERT INTO activities (id, project_id, name, owner_res_id, status) 
-VALUES ('ACT-LIVE-001', 'PRJ-ACTIVE-001', 'Implement OAuth2', 'RES-ARCHITECT-001', 'in_progress');
-
--- Project B: Stalled (to test anomaly detection)
-INSERT INTO projects (id, name, owner_res_id, status) 
-VALUES ('PRJ-STALL-001', 'Legacy Migration', 'RES-ARCHITECT-001', 'stalled');
-
-INSERT INTO activities (id, project_id, name, owner_res_id, status) 
-VALUES ('ACT-STALL-001', 'PRJ-STALL-001', 'Database Schema Mapping', 'RES-ARCHITECT-001', 'stalled');
-
-
--- ==============================================================================
---  4. MODULES
--- ==============================================================================
-INSERT INTO modules (id, project_id, name, owner_res_id) 
-VALUES ('MOD-AUTH-CORE', 'PRJ-ACTIVE-001', 'Auth Core', 'RES-ARCHITECT-001');
-
-INSERT INTO modules (id, project_id, name, owner_res_id) 
-VALUES ('MOD-LEGACY-DB', 'PRJ-STALL-001', 'Legacy DB Parser', 'RES-ARCHITECT-001');
-
-
--- ==============================================================================
---  5. TASKS (The core of the test slice)
--- ==============================================================================
-
--- SCENARIO: Chain of dependencies
--- TSK-DONE-001 (DONE) -> TSK-PEND-001 (PENDING) -> TSK-PEND-003 (PENDING)
-INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, status, module_iteration_goal, is_approved)
-VALUES ('TSK-DONE-001', 'PRJ-ACTIVE-001', 'ACT-LIVE-001', 'MOD-AUTH-CORE', 'RES-CODER-001', 'done', 'Setup repo', TRUE);
-
-INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, status, module_iteration_goal, depends_on, is_approved)
-VALUES ('TSK-PEND-001', 'PRJ-ACTIVE-001', 'ACT-LIVE-001', 'MOD-AUTH-CORE', 'RES-CODER-001', 'pending', 'Implement JWT logic', 'TSK-DONE-001', TRUE);
-
-INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, status, module_iteration_goal, depends_on, is_approved)
-VALUES ('TSK-PEND-003', 'PRJ-ACTIVE-001', 'ACT-LIVE-001', 'MOD-AUTH-CORE', 'RES-CODER-001', 'pending', 'Write unit tests', 'TSK-PEND-001', TRUE);
-
--- SCENARIO: Task with no dependencies, should be promoted to READY immediately
-INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, status, module_iteration_goal, is_approved)
-VALUES ('TSK-PEND-002', 'PRJ-ACTIVE-001', 'ACT-LIVE-001', 'MOD-AUTH-CORE', 'RES-CODER-001', 'pending', 'Doc review', TRUE);
-
--- SCENARIO: Task that is PENDING but NOT APPROVED
-INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, status, module_iteration_goal, is_approved)
-VALUES ('TSK-AWAIT-001', 'PRJ-ACTIVE-001', 'ACT-LIVE-001', 'MOD-AUTH-CORE', 'RES-CODER-001', 'pending', 'Dangerous database migration', FALSE);
-
--- SCENARIO: A task already running on a resource
-INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, status, module_iteration_goal, is_approved)
-VALUES ('TSK-RUN-001', 'PRJ-ACTIVE-001', 'ACT-LIVE-001', 'MOD-AUTH-CORE', 'RES-CODER-002', 'in_progress', 'Debugging session manager', TRUE);
-
--- SCENARIO: A task READY to be dispatched
-INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, status, module_iteration_goal, is_approved)
-VALUES ('TSK-READY-001', 'PRJ-ACTIVE-001', 'ACT-LIVE-001', 'MOD-AUTH-CORE', 'RES-CODER-003', 'ready', 'Refactor logger', TRUE);
-
-
--- ANOMALY SCENARIO: A FAILED task that needs REPAIR
-INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, status, module_iteration_goal, blocker_reason, is_approved)
-VALUES ('TSK-FAIL-001', 'PRJ-ACTIVE-001', 'ACT-LIVE-001', 'MOD-AUTH-CORE', 'RES-CODER-001', 'failed', 'API Integration', 'Rate limit exceeded', TRUE);
-
--- ANOMALY SCENARIO: A BLOCKED task
-INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, status, module_iteration_goal, blocker_reason, is_approved)
-VALUES ('TSK-BLOCK-001', 'PRJ-ACTIVE-001', 'ACT-LIVE-001', 'MOD-AUTH-CORE', 'RES-CODER-001', 'blocked', 'Secrets setup', 'Missing vault keys', TRUE);
-
--- ANOMALY SCENARIO: Activity ACT-STALL-001 is stalled because all its tasks are terminal
-INSERT INTO tasks (id, project_id, activity_id, module_id, resource_id, status, module_iteration_goal, is_approved)
-VALUES ('TSK-DONE-002', 'PRJ-STALL-001', 'ACT-STALL-001', 'MOD-LEGACY-DB', 'RES-CODER-001', 'done', 'Scan legacy tables', TRUE);
+-- 8. SYSTEM STATE
+INSERT INTO system_state (key, value) VALUES 
+('run_mode', '"auto"'),
+('step_count', '0');
