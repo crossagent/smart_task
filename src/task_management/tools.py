@@ -2,14 +2,12 @@ import os
 import json
 import logging
 from typing import Optional, Any
-from fastmcp import FastMCP
-
 from .db import execute_query, execute_mutation, CustomEncoder
 
-logger = logging.getLogger("smart_task.task_management.tools")
+# Import the shared MCP singleton
+from ..shared.mcp_app import mcp
 
-# 1. Initialize FastMCP instance here to enable decorator usage across the module
-mcp = FastMCP("Smart Task Hub")
+logger = logging.getLogger("smart_task.task_management.tools")
 
 @mcp.tool()
 def query_sql(query: str) -> str:

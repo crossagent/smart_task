@@ -6,8 +6,11 @@ from fastapi.staticfiles import StaticFiles
 from fastmcp.utilities.lifespan import combine_lifespans
 from contextlib import asynccontextmanager
 
-# Import the configured MCP instance (which now uses decorators)
-from src.task_management.tools import mcp
+# 1. Import the shared MCP singleton
+from src.shared.mcp_app import mcp
+# Ensure tools are loaded so decorators are executed
+import src.task_management.tools 
+
 from src.task_execution.scheduler import scheduler_daemon
 from src.resource_management.supervisor import agent_supervisor
 from .dashboard_api import router as dashboard_router
@@ -16,7 +19,7 @@ import logging
 logger = logging.getLogger("smart_task.mcp_server")
 logging.basicConfig(level=logging.INFO)
 
-# 1. Define FastAPI Application Lifespan
+# 2. Define FastAPI Application Lifespan
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     """Lifecycle hook to start project-specific background processes."""
@@ -36,8 +39,7 @@ async def app_lifespan(app: FastAPI):
     yield
     logger.info("Shutting down project background tasks...")
 
-# 2. Initialize FastAPI App with Combined Lifespan
-# Create the MCP ASGI app first to access its lifespan
+# 3. Initialize FastAPI App with Combined Lifespan
 mcp_app = mcp.http_app(transport="sse")
 
 app = FastAPI(
@@ -53,11 +55,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 3. Mount MCP App and Dashboard APIs
+# 4. Mount MCP App and Dashboard APIs
 app.mount("/mcp", mcp_app)
 app.include_router(dashboard_router)
 
-# 4. Serve Static Dashboard at /dashboard
+# 5. Serve Static Dashboard at /dashboard
 if os.path.exists("dashboard/dist"):
     app.mount("/dashboard", StaticFiles(directory="dashboard/dist", html=True), name="dashboard")
     
