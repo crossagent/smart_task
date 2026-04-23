@@ -3,7 +3,9 @@ import threading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
+from fastmcp.utilities.lifespan import combine_lifespans
+from contextlib import asynccontextmanager
 
 from src.task_management.tools import register_tools
 from src.task_execution.scheduler import scheduler_daemon
@@ -16,14 +18,14 @@ logging.basicConfig(level=logging.INFO)
 
 # 1. Initialize FastMCP Server
 mcp = FastMCP("Smart Task Hub")
-mcp.settings.transport_security.enable_dns_rebinding_protection = False
 register_tools(mcp)
 
-from contextlib import asynccontextmanager
-
+# 2. Define FastAPI Application Lifespan
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifecycle hook to start background processes."""
+async def app_lifespan(app: FastAPI):
+    """Lifecycle hook to start project-specific background processes."""
+    logger.info("Starting up project background tasks...")
+    
     # Start the execution scheduler in the background
     scheduler_thread = threading.Thread(target=scheduler_daemon, daemon=True)
     scheduler_thread.start()
@@ -36,10 +38,16 @@ async def lifespan(app: FastAPI):
         agent_supervisor.load_config()
     
     yield
-    # Cleanup if needed
+    logger.info("Shutting down project background tasks...")
 
-# 2. Initialize FastAPI App
-app = FastAPI(title="Smart Task Hub Dashboard", lifespan=lifespan)
+# 3. Initialize FastAPI App with Combined Lifespan
+# Create the MCP ASGI app first to access its lifespan
+mcp_app = mcp.http_app(transport="sse")
+
+app = FastAPI(
+    title="Smart Task Hub Dashboard", 
+    lifespan=combine_lifespans(app_lifespan, mcp_app.lifespan)
+)
 
 # Enable CORS for frontend development
 app.add_middleware(
@@ -49,11 +57,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 3. Mount MCP App
-# FastMCP provides streamable_http_app() for ASGI integration
-app.mount("/mcp", mcp.streamable_http_app())
-
-# 4. Include Dashboard APIs
+# 4. Mount MCP App and Dashboard APIs
+app.mount("/mcp", mcp_app)
 app.include_router(dashboard_router)
 
 # 5. Serve Static Dashboard at /dashboard

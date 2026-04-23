@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import subprocess
@@ -90,7 +90,9 @@ class AgentSupervisor:
         for handle in self.pool.values():
             self._start_agent_process(handle)
 
-        # 启动自愈和监控守护线�?        self._watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True)
+        # Start watchdog thread
+        thread = threading.Thread(target=self._watchdog_loop, daemon=True)
+        self._watchdog_thread = thread
         self._watchdog_thread.start()
 
     def _start_agent_process(self, handle: PersistentAgentHandle):
@@ -101,7 +103,7 @@ class AgentSupervisor:
 
         logger.info(f"Starting Local Agent {handle.agent_id} on port {handle.port}...")
         
-        # 准备环境变量
+        # 鍑嗗鐜鍙橀噺
         env = os.environ.copy()
         if self.db_url:
             env["SESSION_SERVICE_URI"] = self.db_url
@@ -117,7 +119,7 @@ class AgentSupervisor:
         if handle.workspace:
             env["SMART_WORKSPACE_PATH"] = handle.workspace
 
-        # 命令：uv run adk api_server <dir> --port <port>
+        # 鍛戒护锛歶v run adk api_server <dir> --port <port>
         cmd = ["uv", "run", "adk", "api_server", handle.dir, "--port", str(handle.port)]
         
         try:
@@ -131,7 +133,7 @@ class AgentSupervisor:
             )
             handle.process = process
             
-            # 日志聚合记录（异步）
+            # 鏃ュ織鑱氬悎璁板綍锛堝紓姝ワ級
             threading.Thread(target=self._log_reader, args=(handle,), daemon=True).start()
             
         except Exception as e:
@@ -148,7 +150,7 @@ class AgentSupervisor:
         """Continuously monitors health and restarts failed agents."""
         while not self._stop_event.is_set():
             self._reconcile_pool()
-            # �?10 秒检查一�?            time.sleep(10)
+            # 姣?10 绉掓鏌ヤ竴娆?            time.sleep(10)
 
     def _reconcile_pool(self):
         """Internal logic to check health and trigger restarts."""
