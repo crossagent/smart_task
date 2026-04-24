@@ -176,27 +176,25 @@ def upsert_task(
     project_id: Optional[str] = None,
     activity_id: Optional[str] = None,
     status: str = "pending",
-    is_approved: bool = True,
     depends_on: Optional[List[str]] = None,
     estimated_hours: Optional[float] = None
 ) -> str:
     """Create or update a record in the tasks (state mutations) table."""
     sql = """
-        INSERT INTO tasks (id, module_id, module_iteration_goal, project_id, activity_id, status, is_approved, depends_on, estimated_hours)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO tasks (id, module_id, module_iteration_goal, project_id, activity_id, status, depends_on, estimated_hours)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET
             module_id = EXCLUDED.module_id,
             module_iteration_goal = EXCLUDED.module_iteration_goal,
             project_id = EXCLUDED.project_id,
             activity_id = EXCLUDED.activity_id,
             status = EXCLUDED.status,
-            is_approved = EXCLUDED.is_approved,
             depends_on = EXCLUDED.depends_on,
             estimated_hours = EXCLUDED.estimated_hours,
             updated_at = CURRENT_TIMESTAMP
     """
     try:
-        execute_mutation(sql, (id, module_id, module_iteration_goal, project_id, activity_id, status, is_approved, depends_on or [], estimated_hours))
+        execute_mutation(sql, (id, module_id, module_iteration_goal, project_id, activity_id, status, depends_on or [], estimated_hours))
         return f"Successfully processed task (ID: {id})."
     except Exception as e:
         return f"Error: {str(e)}"
@@ -254,9 +252,68 @@ def submit_task_deliverable(task_id: str, status: str, execution_result: str, ar
         return f"Error: {str(e)}"
 
 @mcp.tool()
+def propose_blueprint_plan(
+    title: str,
+    actions: List[dict],
+    project_id: Optional[str] = None,
+    activity_id: Optional[str] = None
+) -> str:
+    """
+    Propose a set of blueprint modifications for human review.
+    'actions' should be a list of dicts: {op: 'insert'|'update'|'delete', table: str, data: dict, where: dict}
+    """
+    sql = """
+        INSERT INTO blueprint_plans (title, project_id, activity_id, proposed_actions, status)
+        VALUES (%s, %s, %s, %s, 'pending')
+        RETURNING id
+    """
+    try:
+        results = execute_query(sql, (title, project_id, activity_id, json.dumps(actions)))
+        plan_id = results[0]['id']
+        return f"Blueprint modification plan '{title}' proposed (ID: {plan_id}). Awaiting human approval."
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+def execute_approved_plan(plan_id: int) -> str:
+    """
+    Execute an approved blueprint modification plan. 
+    This is called by the Architect agent after receiving a 'plan_approved' event.
+    """
+    from .scheduler import _execute_blueprint_actions, db_transaction
+    
+    plan_query = "SELECT * FROM blueprint_plans WHERE id = %s"
+    try:
+        plan_rows = execute_query(plan_query, (plan_id,))
+        if not plan_rows:
+            return f"Error: Plan {plan_id} not found."
+        
+        plan = plan_rows[0]
+        if plan['status'] != 'approved':
+            return f"Error: Plan {plan_id} is in status '{plan['status']}', not 'approved'."
+        
+        actions = plan['proposed_actions']
+        if isinstance(actions, str):
+            actions = json.loads(actions)
+            
+        with db_transaction() as conn:
+            try:
+                _execute_blueprint_actions(actions, conn)
+                execute_mutation("UPDATE blueprint_plans SET status = 'executed', updated_at = CURRENT_TIMESTAMP WHERE id = %s", (plan_id,), connection=conn)
+                return f"Plan {plan_id} executed successfully."
+            except Exception as e:
+                # Execution failed - record error and notify agent
+                error_msg = str(e)
+                execute_mutation("UPDATE blueprint_plans SET status = 'failed_execution', error_message = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", (error_msg, plan_id), connection=conn)
+                return f"Execution of plan {plan_id} failed: {error_msg}. Please review and propose a corrected plan."
+                
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@mcp.tool()
 def delete_record(table: str, id: str) -> str:
     """Delete a record from allowed tables."""
-    allowed = {"resources", "projects", "activities", "modules", "tasks", "task_assignments"}
+    allowed = {"resources", "projects", "activities", "modules", "tasks", "task_assignments", "blueprint_plans"}
     if table not in allowed: return f"Error: Invalid table '{table}'."
     try:
         execute_mutation(f"DELETE FROM {table} WHERE id = %s", (id,))

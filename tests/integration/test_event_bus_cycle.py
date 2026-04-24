@@ -30,7 +30,8 @@ def mock_agent_pool():
         "RES-CODER-001":     {"url": "http://coder1:9011", "agent_id": "coder-agent"},
         "RES-CODER-002":     {"url": "http://coder2:9012", "agent_id": "coder-agent"},
         "RES-CODER-003":     {"url": "http://coder3:9013", "agent_id": "coder-agent"},
-        "RES-CODER-004":     {"url": "http://coder4:9014", "agent_id": "coder-agent"}
+        "RES-CODER-004":     {"url": "http://coder4:9014", "agent_id": "coder-agent"},
+        "RES-CODER-005":     {"url": "http://coder5:9015", "agent_id": "coder-agent"}
     }
     with respx.mock(assert_all_called=False) as respx_m:
         respx_m.post().respond(200, json={"status": "ok"})

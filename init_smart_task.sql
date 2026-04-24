@@ -3,6 +3,7 @@
 -- ==============================================================================
 
 -- 0. CLEANUP (Reverse FK order)
+DROP TABLE IF EXISTS blueprint_plans CASCADE;
 DROP TABLE IF EXISTS events CASCADE;
 DROP TABLE IF EXISTS system_state CASCADE;
 DROP TABLE IF EXISTS task_assignments CASCADE;
@@ -96,7 +97,6 @@ CREATE TABLE tasks (
     module_id VARCHAR(50) NOT NULL REFERENCES modules(id) ON DELETE CASCADE,
     module_iteration_goal TEXT NOT NULL,       -- The "Soul" of the task
     status VARCHAR(50) DEFAULT 'pending',      -- pending | ready | in_progress | done | failed | blocked
-    is_approved BOOLEAN DEFAULT TRUE,
     depends_on VARCHAR(50)[] DEFAULT '{}',     -- DAG dependencies
     estimated_hours DECIMAL(10,2),
     execution_result TEXT,
@@ -143,12 +143,26 @@ CREATE TABLE events (
     resolved_at TIMESTAMPTZ
 );
 
--- 10. TRIGGERS
+-- 10. BLUEPRINT MODIFICATION PLANS
+CREATE TABLE blueprint_plans (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    project_id VARCHAR(50) REFERENCES projects(id) ON DELETE CASCADE,
+    activity_id VARCHAR(50) REFERENCES activities(id) ON DELETE CASCADE,
+    status VARCHAR(50) DEFAULT 'pending',      -- pending | approved | rejected | executed | failed_execution
+    proposed_actions JSONB NOT NULL,           -- List of {op, table, data, where}
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 11. TRIGGERS
 CREATE TRIGGER update_resources_modtime BEFORE UPDATE ON resources FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 CREATE TRIGGER update_projects_modtime BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 CREATE TRIGGER update_activities_modtime BEFORE UPDATE ON activities FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 CREATE TRIGGER update_modules_modtime BEFORE UPDATE ON modules FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 CREATE TRIGGER update_tasks_modtime BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+CREATE TRIGGER update_blueprint_plans_modtime BEFORE UPDATE ON blueprint_plans FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
 -- DEFAULT DATA
 INSERT INTO resources (id, name, org_role, is_available, resource_type) 

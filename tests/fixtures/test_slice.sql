@@ -10,9 +10,10 @@ TRUNCATE task_assignments, events, tasks, modules, activities, projects, resourc
 INSERT INTO resources (id, name, org_role, is_available, resource_type) VALUES
 ('RES-ARCHITECT-001', 'System Architect', 'Control Plane', TRUE,  'agent'),
 ('RES-CODER-001',     'Coder One',        'Coder',         TRUE,  'human'),
-('RES-CODER-002',     'Bob Coder',        'Coder',         TRUE,  'human'),
+('RES-CODER-002',     'Bob Coder',        'Coder',         FALSE, 'human'),
 ('RES-CODER-003',     'Coder Three',      'Coder',         TRUE,  'human'),
-('RES-CODER-004',     'Dave Coder',       'Coder',         TRUE,  'human');
+('RES-CODER-004',     'Dave Coder',       'Coder',         TRUE,  'human'),
+('RES-CODER-005',     'Eve Coder',        'Coder',         TRUE,  'human');
 
 -- 3. MODULES (Physical Entities)
 INSERT INTO modules (id, name, owner_res_id, local_path, repo_url, entity_type) VALUES
@@ -33,20 +34,20 @@ INSERT INTO activities (id, project_id, name, owner_res_id, status) VALUES
 ('ACT-STALL-001', 'PRJ-TEST-001', 'Stalled Activity',        'RES-ARCHITECT-001', 'Active');
 
 -- 6. TASKS
-INSERT INTO tasks (id, project_id, activity_id, module_id, module_iteration_goal, status, is_approved) VALUES
+INSERT INTO tasks (id, project_id, activity_id, module_id, module_iteration_goal, status) VALUES
 -- Terminal States
-('TSK-DONE-001',  'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-DB',   'Setup DB Schema',   'done',      TRUE),
-('TSK-FAIL-001',  'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-AUTH', 'Init Auth Config',  'failed',    TRUE),
-('TSK-BLOCK-001', 'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-UI',   'Design Login UI',   'blocked',   TRUE),
+('TSK-DONE-001',  'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-DB',   'Setup DB Schema',   'done'),
+('TSK-FAIL-001',  'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-AUTH', 'Init Auth Config',  'failed'),
+('TSK-BLOCK-001', 'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-UI',   'Design Login UI',   'blocked'),
 
 -- Pending / Ready States
-('TSK-PEND-001',  'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-AUTH', 'Implement OAuth2',  'pending',   TRUE),
-('TSK-PEND-002',  'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-DOCS', 'Write API Docs',    'pending',   TRUE),
-('TSK-AWAIT-001', 'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-UI',   'Build Dashboard',   'pending',   FALSE),
-('TSK-READY-001', 'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-UI',   'Fix CSS Bugs',      'ready',     TRUE),
+('TSK-PEND-001',  'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-AUTH', 'Implement OAuth2',  'pending'),
+('TSK-PEND-002',  'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-DOCS', 'Write API Docs',    'pending'),
+('TSK-AWAIT-001', 'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-UI',   'Build Dashboard',   'pending'),
+('TSK-READY-001', 'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-UI',   'Fix CSS Bugs',      'ready'),
 
 -- In-Progress (Running)
-('TSK-RUN-001',   'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-DB',   'Optimize Queries',  'in_progress', TRUE);
+('TSK-RUN-001',   'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-DB',   'Optimize Queries',  'in_progress');
 
 -- Set dependencies
 UPDATE tasks SET depends_on = '{TSK-DONE-001}' WHERE id = 'TSK-PEND-001';

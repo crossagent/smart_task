@@ -45,8 +45,8 @@ def test_full_database_crud_cycle(db_conn, test_data_ids):
         )
         # Task
         cur.execute(
-            "INSERT INTO tasks (id, module_id, resource_id, project_id, activity_id, module_iteration_goal) VALUES (%s, %s, %s, %s, %s, %s)",
-            (ids["tsk"], ids["mod"], ids["res"], ids["prj"], ids["act"], "Verify CRUD")
+            "INSERT INTO tasks (id, module_id, project_id, activity_id, module_iteration_goal) VALUES (%s, %s, %s, %s, %s)",
+            (ids["tsk"], ids["mod"], ids["prj"], ids["act"], "Verify CRUD")
         )
         db_conn.commit()
 

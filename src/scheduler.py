@@ -91,7 +91,6 @@ def run_system_bus_cycle():
             state = {row['key']: row['value'] for row in state_data}
             run_mode = str(state.get('run_mode', "auto")).strip('"')
             step_count = int(state.get('step_count', 0))
-
             if run_mode != "pause" or step_count > 0:
                 if step_count > 0:
                     execute_mutation("UPDATE system_state SET value = %s WHERE key = 'step_count'", (str(step_count - 1),), connection=conn)
@@ -141,7 +140,7 @@ def _process_pending_events(connection=None):
             execute_mutation("UPDATE events SET status = %s, resolved_by = %s, resolved_at = now() WHERE id = %s", (status, resolution_id, event['id']), connection=connection)
 
 def _promote_pending_tasks(connection=None):
-    pending = execute_query("SELECT id, depends_on, is_approved FROM tasks WHERE status = 'pending'", connection=connection)
+    pending = execute_query("SELECT id, depends_on FROM tasks WHERE status = 'pending'", connection=connection)
     for task in pending:
         task_id = task['id']
         deps = task['depends_on'] or []
@@ -154,8 +153,7 @@ def _promote_pending_tasks(connection=None):
             can_promote = len(dep_rows) == len(deps) and all(d['status'] in ('done', 'failed') for d in dep_rows)
 
         if can_promote:
-            status = 'ready' if task['is_approved'] else 'awaiting_approval'
-            execute_mutation("UPDATE tasks SET status = %s WHERE id = %s", (status, task_id), connection=connection)
+            execute_mutation("UPDATE tasks SET status = 'ready' WHERE id = %s", (task_id,), connection=connection)
 
 def _dispatch_ready_tasks(connection=None):
     """Pure Worker Dispatch. Management tasks are handled by the Attention Core."""
