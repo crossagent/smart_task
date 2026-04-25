@@ -43,10 +43,6 @@ app = FastAPI(
     lifespan=combine_lifespans(app_lifespan, mcp_app.lifespan)
 )
 
-# Mount the MCP app at the root. 
-# Since FastMCP adds its own /mcp prefix, this results in http://localhost:45666/mcp
-app.mount("/", mcp_app)
-
 # Add CORS to the main app
 app.add_middleware(
     CORSMiddleware,
@@ -60,11 +56,10 @@ app.include_router(dashboard_router)
 
 if os.path.exists("dashboard/dist"):
     app.mount("/dashboard", StaticFiles(directory="dashboard/dist", html=True), name="dashboard")
-    
-    @app.get("/")
-    async def root_redirect():
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url="/dashboard")
+
+# Merge MCP routes directly into the main app to avoid mounting/priority issues
+for route in mcp_app.routes:
+    app.routes.append(route)
 
 if __name__ == "__main__":
     import uvicorn

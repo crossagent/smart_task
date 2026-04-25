@@ -2,16 +2,8 @@
 --  SMART TASK HUB - REFINED SCHEMA (Module-Centric & Decoupled Execution)
 -- ==============================================================================
 
--- 0. CLEANUP (Reverse FK order)
-DROP TABLE IF EXISTS blueprint_plans CASCADE;
-DROP TABLE IF EXISTS events CASCADE;
-DROP TABLE IF EXISTS system_state CASCADE;
-DROP TABLE IF EXISTS task_assignments CASCADE;
-DROP TABLE IF EXISTS tasks CASCADE;
-DROP TABLE IF EXISTS modules CASCADE;
-DROP TABLE IF EXISTS activities CASCADE;
-DROP TABLE IF EXISTS projects CASCADE;
-DROP TABLE IF EXISTS resources CASCADE;
+-- 0. CLEANUP (Removed to ensure persistence)
+-- Table structure will be created only if they don't exist.
 
 -- 1. UTILITIES
 CREATE OR REPLACE FUNCTION update_modified_column()
@@ -24,7 +16,7 @@ $$ language 'plpgsql';
 
 -- 2. RESOURCES (Compute Slots / Agent Identities)
 -- Represents WHO can do work.
-CREATE TABLE resources (
+CREATE TABLE IF NOT EXISTS resources (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     resource_type VARCHAR(50) DEFAULT 'human', -- human | agent
@@ -39,7 +31,7 @@ CREATE TABLE resources (
 
 -- 3. PROJECTS (Strategic Containers)
 -- Represents the "Why" and "When".
-CREATE TABLE projects (
+CREATE TABLE IF NOT EXISTS projects (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     status VARCHAR(50) DEFAULT 'Planning',    -- Planning | Active | Done
@@ -54,7 +46,7 @@ CREATE TABLE projects (
 
 -- 4. ACTIVITIES (Execution Strategies)
 -- Represents the "How" (The roadmap within a project).
-CREATE TABLE activities (
+CREATE TABLE IF NOT EXISTS activities (
     id VARCHAR(50) PRIMARY KEY,
     project_id VARCHAR(50) REFERENCES projects(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
@@ -73,7 +65,7 @@ CREATE TABLE activities (
 -- 5. MODULES (Physical Entities)
 -- Represents the "What" (The actual code/docs/assets).
 -- Independent of specific projects.
-CREATE TABLE modules (
+CREATE TABLE IF NOT EXISTS modules (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     owner_res_id VARCHAR(50) NOT NULL REFERENCES resources(id),
@@ -90,7 +82,7 @@ CREATE TABLE modules (
 
 -- 6. TASKS (Actionable State Mutations)
 -- Represents the "Step" (Moving a module to a new state).
-CREATE TABLE tasks (
+CREATE TABLE IF NOT EXISTS tasks (
     id VARCHAR(50) PRIMARY KEY,
     project_id VARCHAR(50) REFERENCES projects(id) ON DELETE CASCADE,
     activity_id VARCHAR(50) REFERENCES activities(id) ON DELETE CASCADE,
@@ -108,7 +100,7 @@ CREATE TABLE tasks (
 
 -- 7. TASK_ASSIGNMENTS (Execution Records / Man-hour tracking)
 -- Represents the "Execution" (Linking a task to a resource over time).
-CREATE TABLE task_assignments (
+CREATE TABLE IF NOT EXISTS task_assignments (
     id SERIAL PRIMARY KEY,
     task_id VARCHAR(50) NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     resource_id VARCHAR(50) NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
@@ -120,14 +112,14 @@ CREATE TABLE task_assignments (
 );
 
 -- 8. SYSTEM STATE (Control Flags)
-CREATE TABLE system_state (
+CREATE TABLE IF NOT EXISTS system_state (
     key VARCHAR(255) PRIMARY KEY,
     value JSONB NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 9. EVENTS (System Event Bus)
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events (
     id SERIAL PRIMARY KEY,
     event_type VARCHAR(50) NOT NULL,
     source VARCHAR(100) NOT NULL,
@@ -144,7 +136,7 @@ CREATE TABLE events (
 );
 
 -- 10. BLUEPRINT MODIFICATION PLANS
-CREATE TABLE blueprint_plans (
+CREATE TABLE IF NOT EXISTS blueprint_plans (
     id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     project_id VARCHAR(50) REFERENCES projects(id) ON DELETE CASCADE,
@@ -166,7 +158,7 @@ CREATE TRIGGER update_blueprint_plans_modtime BEFORE UPDATE ON blueprint_plans F
 
 -- DEFAULT DATA
 INSERT INTO resources (id, name, org_role, is_available, resource_type) 
-VALUES ('RES-ARCHITECT-001', 'System Architect', 'Control Plane', TRUE, 'agent');
+VALUES ('RES-ARCHITECT-001', 'System Architect', 'Control Plane', TRUE, 'agent') ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO system_state (key, value) VALUES ('run_mode', '"auto"');
-INSERT INTO system_state (key, value) VALUES ('step_count', '0');
+INSERT INTO system_state (key, value) VALUES ('run_mode', '"auto"') ON CONFLICT (key) DO NOTHING;
+INSERT INTO system_state (key, value) VALUES ('step_count', '0') ON CONFLICT (key) DO NOTHING;

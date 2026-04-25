@@ -19,7 +19,8 @@ async def get_activities(
         where_clauses.append("created_at >= %s")
         params.append(start)
     if end:
-        where_clauses.append("created_at <= %s")
+        # Use a more inclusive comparison or cast to date
+        where_clauses.append("created_at < (%s::date + 1)")
         params.append(end)
         
     if where_clauses:
@@ -76,7 +77,11 @@ async def get_activity_details(activity_id: str):
     
     try:
         act = execute_query(act_sql, (activity_id,))
-        prog = execute_query(prog_sql, (activity_id,))
+        try:
+            prog = execute_query(prog_sql, (activity_id,))
+        except Exception:
+            # Fallback if view doesn't exist
+            prog = None
         
         if not act:
             raise HTTPException(status_code=404, detail="Activity not found")
