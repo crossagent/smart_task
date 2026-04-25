@@ -34,21 +34,28 @@ async def app_lifespan(app: FastAPI):
     yield
     logger.info("Shutting down project background tasks...")
 
-mcp_app = mcp.http_app(transport="sse")
+# Create the MCP app with streamable-http transport
+mcp_app = mcp.http_app(transport="streamable-http")
 
+# Create the main FastAPI app and combine lifespans
 app = FastAPI(
     title="Smart Task Hub Dashboard", 
     lifespan=combine_lifespans(app_lifespan, mcp_app.lifespan)
 )
 
+# Mount the MCP app at the root. 
+# Since FastMCP adds its own /mcp prefix, this results in http://localhost:45666/mcp
+app.mount("/", mcp_app)
+
+# Add CORS to the main app
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["mcp-session-id"],
 )
 
-app.mount("/mcp", mcp_app)
 app.include_router(dashboard_router)
 
 if os.path.exists("dashboard/dist"):
