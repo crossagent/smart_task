@@ -28,7 +28,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - .:/app
       - /app/.venv
-    command: ["uv", "run", "python", "-m", "src.mcp_server.server"]
+    command: ["uv", "run", "python", "-m", "src.server"]
 
   hub_pm:
     build:

@@ -177,7 +177,7 @@ def _dispatch_ready_tasks(connection=None):
             execute_mutation("UPDATE resources SET is_available = False WHERE id = %s", (candidate,), connection=connection)
             execute_mutation("INSERT INTO task_assignments (task_id, resource_id, status) VALUES (%s, %s, 'active')", (task['id'], candidate), connection=connection)
             res_pool.remove(candidate)
-            threading.Thread(target=_trigger_agent_async, args=(handle['url'], handle['agent_id'], task['id'], candidate, task['module_iteration_goal'])).start()
+            threading.Thread(target=_trigger_agent_async, args=(handle.url, handle.agent_id, task['id'], candidate, task['module_iteration_goal'])).start()
 
 def _trigger_agent_async(url: str, agent_id: str, task_id: str, res_id: str, goal: str):
     try:

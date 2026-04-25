@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 # Simple flat imports
 from .mcp_app import mcp
-import tools 
+from . import tools 
 from .scheduler import scheduler_daemon
 from .supervisor import agent_supervisor
 from .dashboard_api import router as dashboard_router

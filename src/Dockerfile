@@ -30,4 +30,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENTRYPOINT ["/entrypoint.sh"]
 
 # Default command: Start the Hub MCP Server
-CMD ["python3", "-m", "src.mcp_server.server"]
+CMD ["python3", "-m", "src.server"]
