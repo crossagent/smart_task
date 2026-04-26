@@ -2,7 +2,8 @@ import os
 import json
 import logging
 from typing import Optional, Any, List
-from .db import execute_query, execute_mutation, CustomEncoder
+from .db import execute_query, execute_mutation, CustomEncoder, db_transaction
+from . import engine
 
 # Import the shared MCP singleton
 from .mcp_app import mcp
@@ -195,6 +196,18 @@ def upsert_task(
     """
     try:
         execute_mutation(sql, (id, module_id, module_iteration_goal, project_id, activity_id, status, depends_on or [], estimated_hours))
+        
+        # 如果任务直接标记为 ready，发出事件
+        if status == 'ready':
+            engine.emit_event(
+                engine.EVENT_TASK_READY,
+                project_id=project_id,
+                activity_id=activity_id,
+                task_id=id
+            )
+            if engine.get_auto_advance():
+                engine.run_to_stable()
+                
         return f"Successfully processed task (ID: {id})."
     except Exception as e:
         return f"Error: {str(e)}"
@@ -244,10 +257,29 @@ def submit_task_deliverable(task_id: str, status: str, execution_result: str, ar
         WHERE id = %s
     """
     try:
+        # 1. 更新任务状态（物理层基础修改）
         execute_mutation(sql, (status, execution_result, artifact_data, task_id))
-        # Mark assignment as completed
-        execute_mutation("UPDATE task_assignments SET completed_at = CURRENT_TIMESTAMP, status = 'completed' WHERE task_id = %s AND status = 'active'", (task_id,))
-        return f"Task '{task_id}' submitted with status '{status}'."
+        
+        # 2. 发出事件
+        # 先查一下 project/activity ID 以便填充事件上下文
+        task_info = execute_query("SELECT project_id, activity_id FROM tasks WHERE id = %s", (task_id,))
+        p_id = task_info[0]['project_id'] if task_info else None
+        a_id = task_info[0]['activity_id'] if task_info else None
+        
+        engine.emit_event(
+            engine.EVENT_TASK_COMPLETED,
+            task_id=task_id,
+            project_id=p_id,
+            activity_id=a_id
+        )
+        
+        # 3. 阀门控制：如果是自动推进模式，立即执行冲刷
+        summary = ""
+        if engine.get_auto_advance():
+            steps = engine.run_to_stable()
+            summary = f" Auto-advanced {len(steps)} steps."
+            
+        return f"Task '{task_id}' submitted with status '{status}'.{summary}"
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -325,6 +357,11 @@ def execute_approved_plan(plan_id: int) -> str:
             try:
                 _execute_blueprint_actions(actions, conn)
                 execute_mutation("UPDATE blueprint_plans SET status = 'executed', updated_at = CURRENT_TIMESTAMP WHERE id = %s", (plan_id,), connection=conn)
+                
+                # 蓝图执行完毕后，触发引擎检查是否有新任务可以开始
+                if engine.get_auto_advance():
+                    engine.run_to_stable(connection=conn)
+                    
                 return f"Plan {plan_id} executed successfully."
             except Exception as e:
                 # Execution failed - record error and notify agent

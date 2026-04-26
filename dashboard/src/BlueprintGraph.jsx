@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import mermaid from 'mermaid'
-import { RefreshCcw, Info, CheckCircle, XCircle, Search, FileText, Play, Pause, FastForward, Send, Radio, GitBranch } from 'lucide-react'
+import { RefreshCcw, Info, CheckCircle, XCircle, Search, FileText, Play, Pause, SkipForward, Send, Radio, GitBranch, Settings } from 'lucide-react'
 import EventTimeline from './EventTimeline'
 
 // Initialize Mermaid
@@ -25,6 +25,7 @@ function BlueprintGraph({ activityId }) {
   const [loading, setLoading] = useState(false)
   const [userInstruction, setUserInstruction] = useState("")
   const [pendingPlans, setPendingPlans] = useState([])
+  const [autoAdvance, setAutoAdvance] = useState(true)
   const mermaidRef = useRef(null)
 
   const handleSubmitInstruction = async () => {
@@ -43,12 +44,31 @@ function BlueprintGraph({ activityId }) {
     } catch (e) { console.error("Activation failed", e); alert("Failed to activate planner") }
   }
 
-  const handleDispatchTasks = async () => {
+  const handleStep = async () => {
     try {
-      const resp = await axios.post(`/api/system/dispatch_tasks`)
-      alert(`Dispatched ${resp.data.count || 0} tasks!`)
-      fetchGraph()
-    } catch (e) { console.error("Dispatch failed", e); alert("Failed to dispatch tasks") }
+      const resp = await axios.post(`/api/system/step`)
+      if (resp.data.status === 'idle') {
+        alert("System is stable. No pending events.")
+      } else {
+        console.log("Processed event:", resp.data.processed)
+        fetchGraph()
+      }
+    } catch (e) { console.error("Step failed", e); alert("Failed to step engine") }
+  }
+
+  const fetchSettings = async () => {
+    try {
+      const resp = await axios.get('/api/system/settings')
+      setAutoAdvance(resp.data.auto_advance)
+    } catch (e) { console.error("Failed to fetch settings", e) }
+  }
+
+  const handleToggleAutoAdvance = async () => {
+    const newVal = !autoAdvance
+    try {
+      await axios.post('/api/system/settings', null, { params: { auto_advance: newVal } })
+      setAutoAdvance(newVal)
+    } catch (e) { console.error("Failed to update settings", e) }
   }
 
   const fetchGraph = async () => {
@@ -138,6 +158,7 @@ function BlueprintGraph({ activityId }) {
 
   useEffect(() => {
     fetchGraph()
+    fetchSettings()
     const interval = setInterval(fetchGraph, 5000)
     return () => clearInterval(interval)
   }, [activityId])
@@ -176,17 +197,32 @@ function BlueprintGraph({ activityId }) {
                
                <button 
                 onClick={handleActivatePlanner}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500 rounded-lg font-bold text-xs uppercase tracking-tighter transition-all duration-300 shadow-lg shadow-indigo-900/20"
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 rounded-lg font-bold text-xs uppercase tracking-tighter transition-all duration-300"
                >
-                 <CheckCircle size={16} fill="currentColor" className="text-indigo-200" /> Activate Planner
+                 <Settings size={14} /> Activate Planner
                </button>
 
-               <button 
-                onClick={handleDispatchTasks}
-                className="flex items-center gap-2 ml-1 px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all border border-transparent hover:border-slate-700 text-xs font-bold uppercase tracking-widest"
-               >
-                 <Send size={14} /> Dispatch Tasks
-               </button>
+               <div className="h-6 w-[1px] bg-slate-700/50 mx-2" />
+
+               {/* VALVE CONTROLS */}
+               <div className="flex items-center gap-1 bg-slate-950/50 p-1 rounded-lg border border-slate-800">
+                 <button 
+                  onClick={handleToggleAutoAdvance}
+                  title={autoAdvance ? "Pause Auto-Advance" : "Resume Auto-Advance"}
+                  className={`p-2 rounded-md transition-all ${autoAdvance ? 'bg-brand-blue text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                 >
+                   {autoAdvance ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}
+                 </button>
+                 
+                 <button 
+                  onClick={handleStep}
+                  disabled={autoAdvance}
+                  title="Step Engine"
+                  className={`p-2 rounded-md transition-all ${autoAdvance ? 'opacity-20 cursor-not-allowed' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+                 >
+                   <SkipForward size={14} fill="currentColor" />
+                 </button>
+               </div>
 
                <div className="h-6 w-[1px] bg-slate-700/50 mx-2" />
                

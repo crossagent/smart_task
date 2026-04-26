@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional, List
 from .db import execute_query, execute_mutation
+from . import engine
 import json
 
 router = APIRouter(prefix="/api")
@@ -149,7 +150,6 @@ async def reject_blueprint(plan_id: int):
 async def activate_planner(activity_id: str):
     """Manually triggers the Planner (PM Agent) to review the activity board."""
     from .supervisor import agent_supervisor
-    from .scheduler import trigger_planner_async
     import threading
     
     # Locate the Project Manager Agent (typically RES-PM-001)
@@ -159,21 +159,40 @@ async def activate_planner(activity_id: str):
         
     instruction = f"Please review the current events and tasks for activity {activity_id} and propose any necessary blueprint modifications."
     
-    # Trigger asynchronously
+    # Trigger asynchronously using a simple HTTP call
+    from .engine import _send_agent_request
+    import threading
     threading.Thread(
-        target=trigger_planner_async, 
-        args=(pm_url, "project_manager", activity_id, instruction)
+        target=_send_agent_request, 
+        args=(pm_url, "project_manager", f"plan_{activity_id}", instruction)
     ).start()
     
     return {"status": "success", "message": "Planner activated. Check blueprints for new proposals."}
 
-@router.post("/system/dispatch_tasks")
-async def trigger_dispatch_tasks():
-    """Manually dispatch 'ready' tasks to available workers."""
-    from .scheduler import dispatch_tasks
+@router.post("/system/step")
+async def trigger_engine_step():
+    """Manually process the next pending event in the bus."""
     try:
-        result = dispatch_tasks()
-        return result
+        result = engine.step()
+        if not result:
+            return {"status": "idle", "message": "No pending events to process."}
+        return {"status": "success", "processed": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/system/settings")
+async def get_system_settings():
+    """Retrieve current system execution settings."""
+    return {
+        "auto_advance": engine.get_auto_advance()
+    }
+
+@router.post("/system/settings")
+async def update_system_settings(auto_advance: bool):
+    """Update system execution settings (e.g., toggle Auto/Manual mode)."""
+    try:
+        engine.set_auto_advance(auto_advance)
+        return {"status": "success", "auto_advance": auto_advance}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
