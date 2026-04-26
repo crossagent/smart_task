@@ -6,6 +6,34 @@ import { Layout, GitBranch, Terminal } from 'lucide-react'
 
 function App() {
   const [currentActivity, setCurrentActivity] = useState(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const actId = params.get('activityId')
+    if (actId) {
+      setCurrentActivity(actId)
+    }
+
+    const handlePopState = () => {
+      const p = new URLSearchParams(window.location.search)
+      setCurrentActivity(p.get('activityId'))
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  useEffect(() => {
+    const url = new URL(window.location)
+    const existingId = url.searchParams.get('activityId')
+    
+    if (currentActivity && existingId !== currentActivity) {
+      url.searchParams.set('activityId', currentActivity)
+      window.history.pushState({}, '', url)
+    } else if (!currentActivity && existingId) {
+      url.searchParams.delete('activityId')
+      window.history.pushState({}, '', url)
+    }
+  }, [currentActivity])
   
   return (
     <div className="flex flex-col min-h-screen">

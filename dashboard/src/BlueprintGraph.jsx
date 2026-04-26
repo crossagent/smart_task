@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import mermaid from 'mermaid'
-import { RefreshCcw, Info, CheckCircle, XCircle, Search, FileText, Play, Pause, FastForward, Send, Radio } from 'lucide-react'
+import { RefreshCcw, Info, CheckCircle, XCircle, Search, FileText, Play, Pause, FastForward, Send, Radio, GitBranch } from 'lucide-react'
 import EventTimeline from './EventTimeline'
 
 // Initialize Mermaid
@@ -80,21 +80,33 @@ function BlueprintGraph({ activityId }) {
     // Generate Mermaid Syntax
     let code = "graph TD\n"
     
-    // All nodes rendered uniformly (events are in EventTimeline now, not in graph)
+    // Define Classes at the top
+    code += `  classDef awaiting fill:#f59e0b,stroke:#fcd34d,stroke-width:2px,color:#fff\n`
+    code += `  classDef done fill:#10b981,stroke:#059669,stroke-width:1px,color:#fff\n`
+    code += `  classDef ready fill:#3b82f6,stroke:#2563eb,stroke-width:1px,color:#fff\n`
+    code += `  classDef blocked fill:#ef4444,stroke:#dc2626,stroke-width:2px,color:#fff\n`
+
+    // All nodes rendered uniformly
     graphData.nodes.forEach(node => {
-      let style = ""
+      let className = ""
       if (node.status === 'awaiting_approval') {
-        style = ":::awaiting"
+        className = "awaiting"
       } else if (node.status === 'done' || node.status === 'code_done') {
-        style = ":::done"
+        className = "done"
       } else if (node.status === 'ready' || node.status === 'in_progress' || node.status === 'active') {
-        style = ":::ready"
+        className = "ready"
       } else if (node.status === 'blocked' || node.status === 'failed') {
-        style = ":::blocked"
+        className = "blocked"
       }
       
-      const label = node.label.replace(/\n/g, "<br/>")
-      code += `  ${node.id}["${label}"]${style}\n`
+      // Escape special characters in label
+      const safeLabel = node.label.replace(/\n/g, "<br/>").replace(/"/g, "&quot;")
+      
+      // Use quotes around node ID if it contains special chars, though alphanumeric+underscore is usually fine
+      code += `  ${node.id}["${safeLabel}"]\n`
+      if (className) {
+        code += `  class ${node.id} ${className}\n`
+      }
     })
     
     // Define Edges
@@ -102,11 +114,7 @@ function BlueprintGraph({ activityId }) {
       code += `  ${edge.from} --> ${edge.to}\n`
     })
     
-    // Custom Classes
-    code += `  classDef awaiting fill:#f59e0b,stroke:#fcd34d,stroke-width:2px,color:#fff\n`
-    code += `  classDef done fill:#10b981,stroke:#059669,stroke-width:1px,color:#fff\n`
-    code += `  classDef ready fill:#3b82f6,stroke:#2563eb,stroke-width:1px,color:#fff\n`
-    code += `  classDef blocked fill:#ef4444,stroke:#dc2626,stroke-width:2px,color:#fff\n`
+    console.log("Generating Mermaid Code:\n", code)
     
     try {
        // Unique ID for SVG generation to avoid collisions
