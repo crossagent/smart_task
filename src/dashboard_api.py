@@ -38,7 +38,7 @@ async def get_activities(
 async def get_activity_graph(activity_id: str):
     """Returns task nodes and edges for Mermaid visualization."""
     sql = """
-        SELECT id, module_id, resource_id, module_iteration_goal, status, depends_on
+        SELECT id, module_id, module_iteration_goal, status, depends_on
         FROM tasks
         WHERE activity_id = %s
     """
@@ -93,32 +93,55 @@ async def get_activity_details(activity_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/task/{task_id}/logs")
-async def get_logs(task_id: str):
-    """Retrieve execution logs for a specific task."""
-    from src.task_management.tools import get_task_logs
+# --- BLUEPRINT MODIFICATION PLANS ---
+
+@router.get("/blueprints")
+async def get_blueprints(
+    activity_id: Optional[str] = Query(None),
+    status: Optional[str] = Query(None)
+):
+    """List proposed blueprint modification plans."""
+    sql = "SELECT id, title, activity_id, status, created_at, proposed_actions FROM blueprint_plans"
+    params = []
+    where = []
+    if activity_id:
+        where.append("activity_id = %s")
+        params.append(activity_id)
+    if status:
+        where.append("status = %s")
+        params.append(status)
+    
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY created_at DESC"
+    
     try:
-        logs = get_task_logs(task_id)
-        return {"logs": logs}
+        return execute_query(sql, tuple(params))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/task/{task_id}/approve")
-async def approve(task_id: str):
-    """Manually approve a task and promote it to READY."""
-    from .tools import approve_task
+@router.post("/blueprint/{plan_id}/approve")
+async def approve_blueprint(plan_id: int):
+    """Approve a blueprint plan. This will likely be picked up by the Architect."""
+    sql = "UPDATE blueprint_plans SET status = 'approved', updated_at = CURRENT_TIMESTAMP WHERE id = %s"
     try:
-        result = approve_task(task_id)
-        return {"message": result}
+        execute_mutation(sql, (plan_id,))
+        # Emit an event to notify the Architect to execute
+        execute_mutation("""
+            INSERT INTO events (event_type, source, severity, payload)
+            VALUES ('plan_approved', 'human', 'critical', %s)
+        """, (json.dumps({'plan_id': plan_id}),))
+        return {"status": "success", "message": f"Plan {plan_id} approved."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-@router.post("/task/{task_id}/block")
-async def block_task(task_id: str, reason: str = Query("External Block")):
-    """Forcefully marks a task as blocked."""
-    sql = "UPDATE tasks SET status = 'blocked', blocker_reason = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s"
+
+@router.post("/blueprint/{plan_id}/reject")
+async def reject_blueprint(plan_id: int):
+    """Reject a proposed blueprint plan."""
+    sql = "UPDATE blueprint_plans SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = %s"
     try:
-        execute_mutation(sql, (reason, task_id))
-        return {"status": "success", "message": f"Task {task_id} blocked."}
+        execute_mutation(sql, (plan_id,))
+        return {"status": "success", "message": f"Plan {plan_id} rejected."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

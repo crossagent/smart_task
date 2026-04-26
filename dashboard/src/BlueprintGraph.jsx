@@ -25,6 +25,7 @@ function BlueprintGraph({ activityId }) {
   const [loading, setLoading] = useState(false)
   const [systemStatus, setSystemStatus] = useState({ run_mode: 'auto', step_count: 0 })
   const [userInstruction, setUserInstruction] = useState("")
+  const [pendingPlans, setPendingPlans] = useState([])
   const mermaidRef = useRef(null)
 
   const fetchSystemStatus = async () => {
@@ -58,6 +59,10 @@ function BlueprintGraph({ activityId }) {
       const resp = await axios.get(`/api/activity/${activityId}/graph`)
       setData(resp.data)
       renderMermaid(resp.data)
+      
+      // Also fetch pending blueprints
+      const plansResp = await axios.get(`/api/blueprints?activity_id=${activityId}&status=pending`)
+      setPendingPlans(plansResp.data)
     } catch (err) {
       console.error("Graph fetch failed", err)
     }
@@ -137,12 +142,19 @@ function BlueprintGraph({ activityId }) {
     return () => clearInterval(interval)
   }, [activityId])
 
-  const handleApprove = async (id) => {
+  const handleApprovePlan = async (planId) => {
     try {
-      await axios.get(`/api/task/${id}/approve`) // Assuming we add this to dashboard_api
+      await axios.post(`/api/blueprint/${planId}/approve`)
       fetchGraph()
-      setSelectedTask(null)
+      alert("Plan approved and dispatched for execution!")
     } catch (e) { alert("Approval failed") }
+  }
+
+  const handleRejectPlan = async (planId) => {
+    try {
+      await axios.post(`/api/blueprint/${planId}/reject`)
+      fetchGraph()
+    } catch (e) { alert("Rejection failed") }
   }
 
   return (
@@ -228,9 +240,51 @@ function BlueprintGraph({ activityId }) {
         </div>
       </div>
 
+      {/* Pending Plans Notification */}
+      {pendingPlans.length > 0 && (
+        <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top duration-500">
+           {pendingPlans.map(plan => (
+             <div key={plan.id} className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6 flex items-center justify-between shadow-2xl backdrop-blur-md">
+                <div className="flex items-center gap-4">
+                   <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center text-amber-500">
+                      <RefreshCcw size={24} className="animate-spin-slow" />
+                   </div>
+                   <div>
+                      <h3 className="text-amber-100 font-bold text-lg">{plan.title}</h3>
+                      <p className="text-amber-500/60 text-xs font-mono uppercase tracking-widest mt-1">
+                        PROPOSED BLUEPRINT MODIFICATION • {plan.id}
+                      </p>
+                   </div>
+                </div>
+                <div className="flex items-center gap-3">
+                   <button 
+                    onClick={() => handleRejectPlan(plan.id)}
+                    className="px-6 py-2.5 rounded-xl border border-amber-500/20 text-amber-500 hover:bg-amber-500/10 transition-all font-bold text-xs uppercase tracking-widest"
+                   >
+                     Reject
+                   </button>
+                   <button 
+                    onClick={() => handleApprovePlan(plan.id)}
+                    className="px-8 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl transition-all font-bold text-xs uppercase tracking-widest shadow-lg shadow-amber-900/40"
+                   >
+                     Review & Approve
+                   </button>
+                </div>
+             </div>
+           ))}
+        </div>
+      )}
+
       {/* Graph Canvas */}
       <div className="glass-panel min-h-[500px] flex items-center justify-center overflow-auto p-12">
-        <div ref={mermaidRef} id="graphDiv" className="w-full flex justify-center" />
+        {data.nodes.length > 0 ? (
+          <div ref={mermaidRef} id="graphDiv" className="w-full flex justify-center" />
+        ) : (
+          <div className="flex flex-col items-center gap-4 opacity-30">
+             <GitBranch size={48} />
+             <p className="text-sm font-medium italic tracking-widest uppercase">No Active Topology Detected</p>
+          </div>
+        )}
       </div>
 
       {/* Event Timeline */}
@@ -282,17 +336,11 @@ function BlueprintGraph({ activityId }) {
 
            {/* Actions */}
            <div className="p-8 bg-slate-950/50 border-t border-slate-700 flex gap-4">
-              {selectedTask.status === 'awaiting_approval' && (
-                <button 
-                  onClick={() => handleApprove(selectedTask.id)}
-                  className="flex-1 bg-brand-green hover:bg-green-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-brand-green/20"
-                >
-                  <CheckCircle size={20} />
-                  APPROVE AND RELEASE
-                </button>
-              )}
-              <button className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-4 rounded-xl border border-slate-600 transition-all">
-                REJECT
+              <button 
+                onClick={() => setSelectedTask(null)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-4 rounded-xl border border-slate-600 transition-all"
+              >
+                CLOSE
               </button>
            </div>
         </div>

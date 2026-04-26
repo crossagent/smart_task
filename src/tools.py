@@ -320,3 +320,5 @@ def delete_record(table: str, id: str) -> str:
         return f"Deleted record from '{table}'."
     except Exception as e:
         return f"Error: {str(e)}"
+
+
