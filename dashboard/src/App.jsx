@@ -48,7 +48,7 @@ function App() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 px-3 py-1 bg-brand-blue/10 text-brand-blue rounded-full text-xs font-semibold">
             <Terminal size={14} />
-            CHIEF ENGINEER MODE
+            PROJECT MANAGEMENT
           </div>
         </div>
       </header>

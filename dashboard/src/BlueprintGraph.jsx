@@ -23,34 +23,32 @@ function BlueprintGraph({ activityId }) {
   const [data, setData] = useState({ nodes: [], edges: [] })
   const [selectedTask, setSelectedTask] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [systemStatus, setSystemStatus] = useState({ run_mode: 'auto', step_count: 0 })
   const [userInstruction, setUserInstruction] = useState("")
   const [pendingPlans, setPendingPlans] = useState([])
   const mermaidRef = useRef(null)
-
-  const fetchSystemStatus = async () => {
-    try {
-      const resp = await axios.get('/api/system/status')
-      setSystemStatus(resp.data)
-    } catch (e) { console.error("Failed to fetch system status", e) }
-  }
-
-  const handleSystemControl = async (mode, step = 0) => {
-    try {
-      await axios.post(`/api/system/control?mode=${mode}&step=${step}`)
-      fetchSystemStatus()
-    } catch (e) { console.error("System control failed", e) }
-  }
 
   const handleSubmitInstruction = async () => {
     if (!userInstruction.trim()) return
     try {
       await axios.post(`/api/activity/${activityId}/instruction`, { instruction: userInstruction })
-      alert("Instruction dispatched to Project Manager!")
       setUserInstruction("")
-      fetchSystemStatus()
       fetchGraph()
     } catch (e) { console.error("Failed to submit instruction", e) }
+  }
+
+  const handleActivatePlanner = async () => {
+    try {
+      await axios.post(`/api/activity/${activityId}/activate_planner`)
+      alert("Architect/Planner activated. Checking board...")
+    } catch (e) { console.error("Activation failed", e); alert("Failed to activate planner") }
+  }
+
+  const handleDispatchTasks = async () => {
+    try {
+      const resp = await axios.post(`/api/system/dispatch_tasks`)
+      alert(`Dispatched ${resp.data.count || 0} tasks!`)
+      fetchGraph()
+    } catch (e) { console.error("Dispatch failed", e); alert("Failed to dispatch tasks") }
   }
 
   const fetchGraph = async () => {
@@ -60,7 +58,6 @@ function BlueprintGraph({ activityId }) {
       setData(resp.data)
       renderMermaid(resp.data)
       
-      // Also fetch pending blueprints
       const plansResp = await axios.get(`/api/blueprints?activity_id=${activityId}&status=pending`)
       setPendingPlans(plansResp.data)
     } catch (err) {
@@ -114,8 +111,6 @@ function BlueprintGraph({ activityId }) {
       code += `  ${edge.from} --> ${edge.to}\n`
     })
     
-    console.log("Generating Mermaid Code:\n", code)
-    
     try {
        // Unique ID for SVG generation to avoid collisions
        const { svg } = await m.render('blueprint-svg-' + Date.now(), code)
@@ -128,8 +123,6 @@ function BlueprintGraph({ activityId }) {
            nodeEl.style.cursor = 'pointer'
            nodeEl.onclick = () => {
              // Extract task ID from the element ID or classes
-             // Mermaid node IDs often look like "task-ID" or just "ID"
-             const possibleIds = Array.from(nodeEl.classList).concat([nodeEl.id])
              const nodeId = graphData.nodes.find(n => nodeEl.id.includes(n.id))?.id
              if (nodeId) {
                 const task = graphData.nodes.find(n => n.id === nodeId)
@@ -145,8 +138,7 @@ function BlueprintGraph({ activityId }) {
 
   useEffect(() => {
     fetchGraph()
-    fetchSystemStatus()
-    const interval = setInterval(fetchSystemStatus, 5000)
+    const interval = setInterval(fetchGraph, 5000)
     return () => clearInterval(interval)
   }, [activityId])
 
@@ -154,7 +146,7 @@ function BlueprintGraph({ activityId }) {
     try {
       await axios.post(`/api/blueprint/${planId}/approve`)
       fetchGraph()
-      alert("Plan approved and dispatched for execution!")
+      alert("Plan approved!")
     } catch (e) { alert("Approval failed") }
   }
 
@@ -172,13 +164,9 @@ function BlueprintGraph({ activityId }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-bold text-slate-400">BLUEPRINT TOPOLOGY</h2>
-            <div className={`flex items-center gap-3 px-3 py-1.5 rounded-full text-[10px] font-bold tracking-widest border transition-all duration-500 ${
-              systemStatus.run_mode === 'auto' 
-                ? 'bg-green-500/10 text-green-500 border-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]' 
-                : 'bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
-            }`}>
-              <Radio size={12} className={systemStatus.run_mode === 'auto' ? 'animate-pulse' : ''} />
-              {systemStatus.run_mode === 'auto' ? 'AUTONOMOUS / LIVE' : 'MANUAL / PAUSED'}
+            <div className="flex items-center gap-3 px-3 py-1.5 rounded-full text-[10px] font-bold tracking-widest border border-slate-600 bg-slate-800 text-slate-300">
+              <Radio size={12} />
+              MANUAL OVERSIGHT
             </div>
           </div>
           
@@ -186,33 +174,19 @@ function BlueprintGraph({ activityId }) {
             {/* Contextual Controller */}
             <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-xl p-1 shadow-2xl">
                
-               {/* PRIMARY TOGGLE: Auto <-> Pause */}
                <button 
-                onClick={() => handleSystemControl(systemStatus.run_mode === 'auto' ? 'pause' : 'auto')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-tighter transition-all duration-300 ${
-                  systemStatus.run_mode === 'auto' 
-                    ? 'text-amber-400 hover:bg-amber-500/10 hover:text-amber-300' 
-                    : 'bg-green-600 text-white hover:bg-green-500 shadow-lg shadow-green-900/20'
-                }`}
+                onClick={handleActivatePlanner}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500 rounded-lg font-bold text-xs uppercase tracking-tighter transition-all duration-300 shadow-lg shadow-indigo-900/20"
                >
-                 {systemStatus.run_mode === 'auto' ? (
-                   <><Pause size={16} fill="currentColor" /> Pause Bus</>
-                 ) : (
-                   <><Play size={16} fill="currentColor" /> Resume Auto</>
-                 )}
+                 <CheckCircle size={16} fill="currentColor" className="text-indigo-200" /> Activate Planner
                </button>
 
-               {/* CONDITIONAL STEP: Only show when paused */}
-               {systemStatus.run_mode === 'pause' && (
-                 <button 
-                  onClick={() => handleSystemControl('pause', 1)}
-                  className="flex items-center gap-2 ml-1 px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all animate-in fade-in slide-in-from-left-2 duration-300 border border-transparent hover:border-slate-700"
-                  title="Execute Single 5s Cycle"
-                 >
-                   <FastForward size={16} fill="currentColor" />
-                   <span className="text-[10px] font-bold uppercase tracking-widest">Next Turn</span>
-                 </button>
-               )}
+               <button 
+                onClick={handleDispatchTasks}
+                className="flex items-center gap-2 ml-1 px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all border border-transparent hover:border-slate-700 text-xs font-bold uppercase tracking-widest"
+               >
+                 <Send size={14} /> Dispatch Tasks
+               </button>
 
                <div className="h-6 w-[1px] bg-slate-700/50 mx-2" />
                
@@ -221,10 +195,10 @@ function BlueprintGraph({ activityId }) {
                   <span className="text-slate-600 font-mono text-[10px] mr-2">{"CMD>"}</span>
                   <input 
                     type="text" 
-                    placeholder="Broadcast instruction to PM..."
+                    placeholder="Broadcast instruction..."
                     value={userInstruction}
                     onChange={(e) => setUserInstruction(e.target.value)}
-                    className="bg-transparent border-none text-xs focus:ring-0 w-64 text-slate-100 placeholder:text-slate-600 font-medium py-2"
+                    className="bg-transparent border-none text-xs focus:ring-0 w-64 text-slate-100 placeholder:text-slate-600 font-medium py-2 outline-none"
                     onKeyDown={(e) => e.key === 'Enter' && handleSubmitInstruction()}
                   />
                   <button 

@@ -9,7 +9,6 @@ from contextlib import asynccontextmanager
 # Simple flat imports
 from .mcp_app import mcp
 from . import tools 
-from .scheduler import scheduler_daemon
 from .supervisor import agent_supervisor
 from .dashboard_api import router as dashboard_router
 import logging
@@ -21,9 +20,6 @@ logging.basicConfig(level=logging.INFO)
 async def app_lifespan(app: FastAPI):
     """Lifecycle hook to start project-specific background processes."""
     logger.info("Starting up project background tasks...")
-    
-    scheduler_thread = threading.Thread(target=scheduler_daemon, daemon=True)
-    scheduler_thread.start()
 
     if os.getenv("DOCKER_MANAGED_AGENTS", "false").lower() != "true":
         agent_supervisor.bootstrap()

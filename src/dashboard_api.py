@@ -145,26 +145,35 @@ async def reject_blueprint(plan_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- SYSTEM COCKPIT CONTROLS ---
+@router.post("/activity/{activity_id}/activate_planner")
+async def activate_planner(activity_id: str):
+    """Manually triggers the Planner (PM Agent) to review the activity board."""
+    from .supervisor import agent_supervisor
+    from .scheduler import trigger_planner_async
+    import threading
+    
+    # Locate the Project Manager Agent (typically RES-PM-001)
+    pm_url = agent_supervisor.get_agent_url("RES-PM-001")
+    if not pm_url:
+        raise HTTPException(status_code=500, detail="Project Manager agent (RES-PM-001) not found or not running.")
+        
+    instruction = f"Please review the current events and tasks for activity {activity_id} and propose any necessary blueprint modifications."
+    
+    # Trigger asynchronously
+    threading.Thread(
+        target=trigger_planner_async, 
+        args=(pm_url, "project_manager", activity_id, instruction)
+    ).start()
+    
+    return {"status": "success", "message": "Planner activated. Check blueprints for new proposals."}
 
-@router.get("/system/status")
-async def get_system_status():
-    """Returns the current run mode and step status."""
+@router.post("/system/dispatch_tasks")
+async def trigger_dispatch_tasks():
+    """Manually dispatch 'ready' tasks to available workers."""
+    from .scheduler import dispatch_tasks
     try:
-        data = execute_query("SELECT key, value FROM system_state")
-        return {row['key']: row['value'] for row in data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/system/control")
-async def set_system_control(mode: str = Query(None), step: int = Query(0)):
-    """Updates global system mode or adds step tokens."""
-    try:
-        if mode:
-            execute_mutation("UPDATE system_state SET value = %s WHERE key = 'run_mode'", (json.dumps(mode),))
-        if step > 0:
-            execute_mutation("UPDATE system_state SET value = (COALESCE(value::int, 0) + %s)::text::jsonb WHERE key = 'step_count'", (step,))
-        return {"status": "success"}
+        result = dispatch_tasks()
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

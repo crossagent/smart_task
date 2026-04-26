@@ -274,13 +274,38 @@ def propose_blueprint_plan(
     except Exception as e:
         return f"Error: {str(e)}"
 
+def _execute_blueprint_actions(actions: List[dict], conn=None):
+    """Executes a list of atomic blueprint modifications."""
+    for action in actions:
+        op = action.get('op')
+        table = action.get('table')
+        data = action.get('data', {})
+        where = action.get('where', {})
+
+        if op == 'update':
+            cols = ", ".join([f"{k} = %s" for k in data.keys()])
+            conds = " AND ".join([f"{k} = %s" for k in where.keys()])
+            sql = f"UPDATE {table} SET {cols} WHERE {conds}"
+            execute_mutation(sql, list(data.values()) + list(where.values()), connection=conn)
+        
+        elif op == 'insert':
+            cols = ", ".join(data.keys())
+            placeholders = ", ".join(["%s"] * len(data))
+            sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders})"
+            execute_mutation(sql, list(data.values()), connection=conn)
+            
+        elif op == 'delete':
+            conds = " AND ".join([f"{k} = %s" for k in where.keys()])
+            sql = f"DELETE FROM {table} WHERE {conds}"
+            execute_mutation(sql, list(where.values()), connection=conn)
+
 @mcp.tool()
 def execute_approved_plan(plan_id: int) -> str:
     """
     Execute an approved blueprint modification plan. 
     This is called by the Architect agent after receiving a 'plan_approved' event.
     """
-    from .scheduler import _execute_blueprint_actions, db_transaction
+    from .db import db_transaction
     
     plan_query = "SELECT * FROM blueprint_plans WHERE id = %s"
     try:
