@@ -2,8 +2,17 @@
 --  SMART TASK HUB - REFINED SCHEMA (Module-Centric & Decoupled Execution)
 -- ==============================================================================
 
--- 0. CLEANUP (Removed to ensure persistence)
--- Table structure will be created only if they don't exist.
+-- 0. CLEANUP
+DROP TABLE IF EXISTS task_assignments CASCADE;
+DROP TABLE IF EXISTS events CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
+DROP TABLE IF EXISTS milestones CASCADE;
+DROP TABLE IF EXISTS modules CASCADE;
+DROP TABLE IF EXISTS activities CASCADE;
+DROP TABLE IF EXISTS projects CASCADE;
+DROP TABLE IF EXISTS resources CASCADE;
+DROP TABLE IF EXISTS system_state CASCADE;
+DROP TABLE IF EXISTS blueprint_plans CASCADE;
 
 -- 1. UTILITIES
 CREATE OR REPLACE FUNCTION update_modified_column()
@@ -29,26 +38,10 @@ CREATE TABLE IF NOT EXISTS resources (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. PROJECTS (Strategic Containers)
--- Represents the "Why" and "When".
-CREATE TABLE IF NOT EXISTS projects (
-    id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    status VARCHAR(50) DEFAULT 'Planning',    -- Planning | Active | Done
-    initiator_res_id VARCHAR(50) NOT NULL REFERENCES resources(id),
-    receiver_res_id VARCHAR(50) REFERENCES resources(id),
-    deadline DATE,
-    memo_content TEXT NOT NULL,
-    ai_summary TEXT,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
--- 4. ACTIVITIES (Execution Strategies)
--- Represents the "How" (The roadmap within a project).
+-- 3. ACTIVITIES (Execution Strategies)
+-- Represents the "How" (The roadmap for engineering).
 CREATE TABLE IF NOT EXISTS activities (
     id VARCHAR(50) PRIMARY KEY,
-    project_id VARCHAR(50) REFERENCES projects(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     owner_res_id VARCHAR(50) NOT NULL REFERENCES resources(id),
     status VARCHAR(50) DEFAULT 'Active',
@@ -58,6 +51,20 @@ CREATE TABLE IF NOT EXISTS activities (
     artifact TEXT,                             -- Final deliverable for the activity
     user_instruction TEXT,
     instruction_version INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. MILESTONES (Key Timeline Nodes)
+-- Represents major goals within an activity.
+CREATE TABLE IF NOT EXISTS milestones (
+    id VARCHAR(50) PRIMARY KEY,
+    activity_id VARCHAR(50) NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    target_date DATE,
+    status VARCHAR(50) DEFAULT 'Pending',      -- Pending | Achieved | Missed
+    reached_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -84,8 +91,8 @@ CREATE TABLE IF NOT EXISTS modules (
 -- Represents the "Step" (Moving a module to a new state).
 CREATE TABLE IF NOT EXISTS tasks (
     id VARCHAR(50) PRIMARY KEY,
-    project_id VARCHAR(50) REFERENCES projects(id) ON DELETE CASCADE,
     activity_id VARCHAR(50) REFERENCES activities(id) ON DELETE CASCADE,
+    milestone_id VARCHAR(50) REFERENCES milestones(id) ON DELETE SET NULL,
     module_id VARCHAR(50) NOT NULL REFERENCES modules(id) ON DELETE CASCADE,
     module_iteration_goal TEXT NOT NULL,       -- The "Soul" of the task
     status VARCHAR(50) DEFAULT 'pending',      -- pending | ready | in_progress | done | failed | blocked
@@ -124,7 +131,6 @@ CREATE TABLE IF NOT EXISTS events (
     event_type VARCHAR(50) NOT NULL,
     source VARCHAR(100) NOT NULL,
     severity VARCHAR(10) DEFAULT 'normal',
-    project_id VARCHAR(50) REFERENCES projects(id),
     activity_id VARCHAR(50) REFERENCES activities(id),
     task_id VARCHAR(50),
     resource_id VARCHAR(50) REFERENCES resources(id),
@@ -139,7 +145,6 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS blueprint_plans (
     id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
-    project_id VARCHAR(50) REFERENCES projects(id) ON DELETE CASCADE,
     activity_id VARCHAR(50) REFERENCES activities(id) ON DELETE CASCADE,
     status VARCHAR(50) DEFAULT 'pending',      -- pending | approved | rejected | executed | failed_execution
     proposed_actions JSONB NOT NULL,           -- List of {op, table, data, where}
@@ -149,11 +154,22 @@ CREATE TABLE IF NOT EXISTS blueprint_plans (
 );
 
 -- 11. TRIGGERS
+DROP TRIGGER IF EXISTS update_resources_modtime ON resources;
 CREATE TRIGGER update_resources_modtime BEFORE UPDATE ON resources FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-CREATE TRIGGER update_projects_modtime BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+DROP TRIGGER IF EXISTS update_activities_modtime ON activities;
 CREATE TRIGGER update_activities_modtime BEFORE UPDATE ON activities FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+DROP TRIGGER IF EXISTS update_milestones_modtime ON milestones;
+CREATE TRIGGER update_milestones_modtime BEFORE UPDATE ON milestones FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+DROP TRIGGER IF EXISTS update_modules_modtime ON modules;
 CREATE TRIGGER update_modules_modtime BEFORE UPDATE ON modules FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+DROP TRIGGER IF EXISTS update_tasks_modtime ON tasks;
 CREATE TRIGGER update_tasks_modtime BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+DROP TRIGGER IF EXISTS update_blueprint_plans_modtime ON blueprint_plans;
 CREATE TRIGGER update_blueprint_plans_modtime BEFORE UPDATE ON blueprint_plans FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
 -- DEFAULT DATA

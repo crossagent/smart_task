@@ -4,7 +4,7 @@
 -- ==============================================================================
 
 -- 1. CLEANUP
-TRUNCATE task_assignments, events, tasks, modules, activities, projects, resources, system_state CASCADE;
+TRUNCATE task_assignments, events, tasks, milestones, modules, activities, resources, system_state CASCADE;
 
 -- 2. RESOURCES
 INSERT INTO resources (id, name, org_role, is_available, resource_type) VALUES
@@ -23,35 +23,34 @@ INSERT INTO modules (id, name, owner_res_id, local_path, repo_url, entity_type) 
 ('MOD-UI',        'Frontend UI',   'RES-CODER-003',     '/app/src/ui',    'git://hub.local/ui',      'Code'),
 ('MOD-DOCS',      'System Docs',   'RES-ARCHITECT-001', '/app/docs',      'git://hub.local/docs',    'Document');
 
--- 4. PROJECTS
-INSERT INTO projects (id, name, initiator_res_id, memo_content, status) VALUES
-('PRJ-LIVE-001',  'Production Migration', 'RES-ARCHITECT-001', 'Migrate all services to PG17', 'Active'),
-('PRJ-TEST-001',  'Integration Testing',  'RES-ARCHITECT-001', 'Test the event bus cycle',    'Active');
+-- 4. ACTIVITIES
+INSERT INTO activities (id, name, owner_res_id, status) VALUES
+('ACT-LIVE-001',  'Production Migration', 'RES-ARCHITECT-001', 'Active'),
+('ACT-STALL-001', 'Integration Testing',  'RES-ARCHITECT-001', 'Active');
 
--- 5. ACTIVITIES
-INSERT INTO activities (id, project_id, name, owner_res_id, status) VALUES
-('ACT-LIVE-001',  'PRJ-LIVE-001', 'Phase 1: Auth Migration', 'RES-ARCHITECT-001', 'Active'),
-('ACT-STALL-001', 'PRJ-TEST-001', 'Stalled Activity',        'RES-ARCHITECT-001', 'Active');
+-- 5. MILESTONES
+INSERT INTO milestones (id, activity_id, name, target_date, status) VALUES
+('MS-LIVE-1', 'ACT-LIVE-001', 'Auth Service Ready', '2026-05-01', 'Pending'),
+('MS-LIVE-2', 'ACT-LIVE-001', 'UI Redesign Complete', '2026-05-15', 'Pending');
 
 -- 6. TASKS
-INSERT INTO tasks (id, project_id, activity_id, module_id, module_iteration_goal, status) VALUES
+INSERT INTO tasks (id, activity_id, milestone_id, module_id, module_iteration_goal, status) VALUES
 -- Terminal States
-('TSK-DONE-001',  'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-DB',   'Setup DB Schema',   'done'),
-('TSK-FAIL-001',  'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-AUTH', 'Init Auth Config',  'failed'),
-('TSK-BLOCK-001', 'PRJ-TEST-001', 'ACT-STALL-001', 'MOD-UI',   'Design Login UI',   'blocked'),
+('TSK-DONE-001',  'ACT-STALL-001', NULL, 'MOD-DB',   'Setup DB Schema',   'done'),
+('TSK-FAIL-001',  'ACT-STALL-001', NULL, 'MOD-AUTH', 'Init Auth Config',  'failed'),
+('TSK-BLOCK-001', 'ACT-STALL-001', NULL, 'MOD-UI',   'Design Login UI',   'blocked'),
 
 -- Pending / Ready States
-('TSK-PEND-001',  'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-AUTH', 'Implement OAuth2',  'pending'),
-('TSK-PEND-002',  'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-DOCS', 'Write API Docs',    'pending'),
-('TSK-AWAIT-001', 'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-UI',   'Build Dashboard',   'pending'),
-('TSK-READY-001', 'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-UI',   'Fix CSS Bugs',      'ready'),
+('TSK-PEND-001',  'ACT-LIVE-001', 'MS-LIVE-1',  'MOD-AUTH', 'Implement OAuth2',  'pending'),
+('TSK-PEND-002',  'ACT-LIVE-001', 'MS-LIVE-2',  'MOD-DOCS', 'Write API Docs',    'pending'),
+('TSK-AWAIT-001', 'ACT-LIVE-001', 'MS-LIVE-2',  'MOD-UI',   'Build Dashboard',   'pending'),
+('TSK-READY-001', 'ACT-LIVE-001', NULL,         'MOD-UI',   'Fix CSS Bugs',      'ready'),
 
 -- In-Progress (Running)
-('TSK-RUN-001',   'PRJ-LIVE-001', 'ACT-LIVE-001',  'MOD-DB',   'Optimize Queries',  'in_progress');
+('TSK-RUN-001',   'ACT-LIVE-001', 'MS-LIVE-1',  'MOD-DB',   'Optimize Queries',  'in_progress');
 
 -- Set dependencies
 UPDATE tasks SET depends_on = '{TSK-DONE-001}' WHERE id = 'TSK-PEND-001';
-UPDATE tasks SET depends_on = '{TSK-PEND-001}' WHERE id = 'TSK-PEND-003'; -- TSK-PEND-003 not in seed, skip
 
 -- 7. ASSIGNMENTS
 INSERT INTO task_assignments (task_id, resource_id, status) VALUES

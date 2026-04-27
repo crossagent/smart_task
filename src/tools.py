@@ -108,38 +108,35 @@ def upsert_module(
         return f"Error: {str(e)}"
 
 @mcp.tool()
-def upsert_project(
+def upsert_milestone(
     id: str,
+    activity_id: str,
     name: str,
-    initiator_res_id: str,
-    receiver_res_id: Optional[str] = None,
-    status: str = "Planning",
-    memo_content: str = "",
-    deadline: Optional[str] = None
+    description: Optional[str] = None,
+    target_date: Optional[str] = None,
+    status: str = "Pending"
 ) -> str:
-    """Create or update a record in the projects table."""
+    """Create or update a record in the milestones table."""
     sql = """
-        INSERT INTO projects (id, name, initiator_res_id, receiver_res_id, status, memo_content, deadline)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO milestones (id, activity_id, name, description, target_date, status)
+        VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET
+            activity_id = EXCLUDED.activity_id,
             name = EXCLUDED.name,
-            initiator_res_id = EXCLUDED.initiator_res_id,
-            receiver_res_id = EXCLUDED.receiver_res_id,
+            description = EXCLUDED.description,
+            target_date = EXCLUDED.target_date,
             status = EXCLUDED.status,
-            memo_content = EXCLUDED.memo_content,
-            deadline = EXCLUDED.deadline,
             updated_at = CURRENT_TIMESTAMP
     """
     try:
-        execute_mutation(sql, (id, name, initiator_res_id, receiver_res_id, status, memo_content, deadline))
-        return f"Successfully processed project '{name}' (ID: {id})."
+        execute_mutation(sql, (id, activity_id, name, description, target_date, status))
+        return f"Successfully processed milestone '{name}' (ID: {id})."
     except Exception as e:
         return f"Error: {str(e)}"
 
 @mcp.tool()
 def upsert_activity(
     id: str,
-    project_id: str,
     name: str,
     owner_res_id: str,
     status: str = "Active",
@@ -150,10 +147,9 @@ def upsert_activity(
 ) -> str:
     """Create or update a record in the activities table."""
     sql = """
-        INSERT INTO activities (id, project_id, name, owner_res_id, status, priority, benefit, deadline, user_instruction)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO activities (id, name, owner_res_id, status, priority, benefit, deadline, user_instruction)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET
-            project_id = EXCLUDED.project_id,
             name = EXCLUDED.name,
             owner_res_id = EXCLUDED.owner_res_id,
             status = EXCLUDED.status,
@@ -164,7 +160,7 @@ def upsert_activity(
             updated_at = CURRENT_TIMESTAMP
     """
     try:
-        execute_mutation(sql, (id, project_id, name, owner_res_id, status, priority, benefit, deadline, user_instruction))
+        execute_mutation(sql, (id, name, owner_res_id, status, priority, benefit, deadline, user_instruction))
         return f"Successfully processed activity '{name}' (ID: {id})."
     except Exception as e:
         return f"Error: {str(e)}"
@@ -174,34 +170,33 @@ def upsert_task(
     id: str,
     module_id: str,
     module_iteration_goal: str,
-    project_id: Optional[str] = None,
     activity_id: Optional[str] = None,
+    milestone_id: Optional[str] = None,
     status: str = "pending",
     depends_on: Optional[List[str]] = None,
     estimated_hours: Optional[float] = None
 ) -> str:
     """Create or update a record in the tasks (state mutations) table."""
     sql = """
-        INSERT INTO tasks (id, module_id, module_iteration_goal, project_id, activity_id, status, depends_on, estimated_hours)
+        INSERT INTO tasks (id, module_id, module_iteration_goal, activity_id, milestone_id, status, depends_on, estimated_hours)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET
             module_id = EXCLUDED.module_id,
             module_iteration_goal = EXCLUDED.module_iteration_goal,
-            project_id = EXCLUDED.project_id,
             activity_id = EXCLUDED.activity_id,
+            milestone_id = EXCLUDED.milestone_id,
             status = EXCLUDED.status,
             depends_on = EXCLUDED.depends_on,
             estimated_hours = EXCLUDED.estimated_hours,
             updated_at = CURRENT_TIMESTAMP
     """
     try:
-        execute_mutation(sql, (id, module_id, module_iteration_goal, project_id, activity_id, status, depends_on or [], estimated_hours))
+        execute_mutation(sql, (id, module_id, module_iteration_goal, activity_id, milestone_id, status, depends_on or [], estimated_hours))
         
         # 如果任务直接标记为 ready，发出事件
         if status == 'ready':
             engine.emit_event(
                 engine.EVENT_TASK_READY,
-                project_id=project_id,
                 activity_id=activity_id,
                 task_id=id
             )
@@ -234,10 +229,9 @@ def get_task_context(task_id: str) -> str:
         SELECT 
             t.id, t.module_iteration_goal, t.status as task_status,
             m.name as module_name, m.local_path, m.repo_url, m.knowledge_base,
-            p.name as project_name, a.name as activity_name
+            a.name as activity_name
         FROM tasks t
         JOIN modules m ON t.module_id = m.id
-        LEFT JOIN projects p ON t.project_id = p.id
         LEFT JOIN activities a ON t.activity_id = a.id
         WHERE t.id = %s
     """
@@ -261,9 +255,8 @@ def submit_task_deliverable(task_id: str, status: str, execution_result: str, ar
         execute_mutation(sql, (status, execution_result, artifact_data, task_id))
         
         # 2. 发出事件
-        # 先查一下 project/activity ID 以便填充事件上下文
-        task_info = execute_query("SELECT project_id, activity_id FROM tasks WHERE id = %s", (task_id,))
-        p_id = task_info[0]['project_id'] if task_info else None
+        # 先查一下 activity ID 以便填充事件上下文
+        task_info = execute_query("SELECT activity_id FROM tasks WHERE id = %s", (task_id,))
         a_id = task_info[0]['activity_id'] if task_info else None
         
         engine.emit_event(
@@ -273,7 +266,6 @@ def submit_task_deliverable(task_id: str, status: str, execution_result: str, ar
                 "status": status,
                 "execution_result": execution_result
             },
-            project_id=p_id,
             activity_id=a_id
         )
         
@@ -291,7 +283,6 @@ def submit_task_deliverable(task_id: str, status: str, execution_result: str, ar
 def propose_blueprint_plan(
     title: str,
     actions: List[dict],
-    project_id: Optional[str] = None,
     activity_id: Optional[str] = None
 ) -> str:
     """
@@ -299,12 +290,12 @@ def propose_blueprint_plan(
     'actions' should be a list of dicts: {op: 'insert'|'update'|'delete', table: str, data: dict, where: dict}
     """
     sql = """
-        INSERT INTO blueprint_plans (title, project_id, activity_id, proposed_actions, status)
-        VALUES (%s, %s, %s, %s, 'pending')
+        INSERT INTO blueprint_plans (title, activity_id, proposed_actions, status)
+        VALUES (%s, %s, %s, 'pending')
         RETURNING id
     """
     try:
-        results = execute_query(sql, (title, project_id, activity_id, json.dumps(actions)))
+        results = execute_query(sql, (title, activity_id, json.dumps(actions)))
         plan_id = results[0]['id']
         return f"Blueprint modification plan '{title}' proposed (ID: {plan_id}). Awaiting human approval."
     except Exception as e:
@@ -379,7 +370,7 @@ def execute_approved_plan(plan_id: int) -> str:
 @mcp.tool()
 def delete_record(table: str, id: str) -> str:
     """Delete a record from allowed tables."""
-    allowed = {"resources", "projects", "activities", "modules", "tasks", "task_assignments", "blueprint_plans"}
+    allowed = {"resources", "activities", "milestones", "modules", "tasks", "task_assignments", "blueprint_plans"}
     if table not in allowed: return f"Error: Invalid table '{table}'."
     try:
         execute_mutation(f"DELETE FROM {table} WHERE id = %s", (id,))

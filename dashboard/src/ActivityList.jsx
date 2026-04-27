@@ -80,6 +80,22 @@ function ActivityList({ onSelect }) {
               <h3 className="font-bold text-lg mb-2 group-hover:text-brand-blue transition-colors leading-tight">
                 {act.name}
               </h3>
+              
+              {act.ms_total > 0 && (
+                <div className="mt-4">
+                  <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-tighter">
+                    <span>Milestones</span>
+                    <span>{act.ms_achieved} / {act.ms_total}</span>
+                  </div>
+                  <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-brand-blue transition-all duration-1000" 
+                      style={{ width: `${(act.ms_achieved / act.ms_total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mt-6">
                 <span className="text-xs text-slate-500 italic">
                   Created {format(new Date(act.created_at), 'MMM d, HH:mm')}

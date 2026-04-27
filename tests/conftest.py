@@ -35,8 +35,28 @@ def cleanup_stale_connections():
     except Exception as e:
         print(f"\n>>> [conftest] Warning: Could not cleanup stale connections: {e}")
 
+@pytest.fixture(scope="session", autouse=True)
+def init_test_db(cleanup_stale_connections):
+    """Initialize the test database schema once per session."""
+    schema_path = os.path.join(os.getcwd(), "init_smart_task.sql")
+    if not os.path.exists(schema_path):
+        print(f"\n>>> [conftest] Warning: {schema_path} not found.")
+        return
+        
+    try:
+        conn = get_db_connection()
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            with open(schema_path, "r", encoding="utf-8") as f:
+                sql = f.read()
+                cur.execute(sql)
+        conn.close()
+        print("\n>>> [conftest] Test database schema initialized.")
+    except Exception as e:
+        print(f"\n>>> [conftest] Error: Could not initialize test database: {e}")
+
 @pytest.fixture(scope="session")
-def db_conn():
+def db_conn(init_test_db):
     """Create a session-wide database connection."""
     conn = get_db_connection()
     yield conn

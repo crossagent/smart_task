@@ -12,22 +12,27 @@ async def get_activities(
     end: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
 ):
     """List activities with optional date filtering."""
-    sql = "SELECT id, name, status, priority, created_at FROM activities"
+    sql = """
+        SELECT a.id, a.name, a.status, a.priority, a.created_at, 
+               COUNT(m.id) as ms_total, 
+               COUNT(m.id) FILTER (WHERE m.status = 'Achieved') as ms_achieved 
+        FROM activities a
+        LEFT JOIN milestones m ON a.id = m.activity_id
+    """
     params = []
     
     where_clauses = []
     if start:
-        where_clauses.append("created_at >= %s")
+        where_clauses.append("a.created_at >= %s")
         params.append(start)
     if end:
-        # Use a more inclusive comparison or cast to date
-        where_clauses.append("created_at < (%s::date + 1)")
+        where_clauses.append("a.created_at < (%s::date + 1)")
         params.append(end)
         
     if where_clauses:
         sql += " WHERE " + " AND ".join(where_clauses)
     
-    sql += " ORDER BY created_at DESC"
+    sql += " GROUP BY a.id ORDER BY a.created_at DESC"
     
     try:
         results = execute_query(sql, tuple(params))
@@ -75,6 +80,7 @@ async def get_activity_details(activity_id: str):
     """Aggregated stats and metadata for the activity."""
     act_sql = "SELECT * FROM activities WHERE id = %s"
     prog_sql = "SELECT * FROM v_activity_progress WHERE activity_id = %s"
+    ms_sql = "SELECT count(*) as total, count(*) FILTER (WHERE status = 'Achieved') as achieved FROM milestones WHERE activity_id = %s"
     
     try:
         act = execute_query(act_sql, (activity_id,))
@@ -84,13 +90,41 @@ async def get_activity_details(activity_id: str):
             # Fallback if view doesn't exist
             prog = None
         
+        milestones = execute_query(ms_sql, (activity_id,))
+        ms_stats = milestones[0] if milestones else {"total": 0, "achieved": 0}
+        
         if not act:
             raise HTTPException(status_code=404, detail="Activity not found")
             
         return {
             "metadata": act[0],
-            "progress": prog[0] if prog else {"completion_percentage": 0}
+            "progress": prog[0] if prog else {"completion_percentage": 0},
+            "milestone_stats": ms_stats
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/activity/{activity_id}/milestones")
+async def get_activity_milestones(activity_id: str):
+    """List all milestones for a specific activity."""
+    sql = "SELECT * FROM milestones WHERE activity_id = %s ORDER BY target_date ASC NULLS LAST, created_at ASC"
+    try:
+        return execute_query(sql, (activity_id,))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/milestone/{milestone_id}/achieve")
+async def achieve_milestone(milestone_id: str):
+    """Mark a milestone as achieved."""
+    sql = "UPDATE milestones SET status = 'Achieved', reached_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = %s"
+    try:
+        execute_mutation(sql, (milestone_id,))
+        # Emit event
+        execute_mutation("""
+            INSERT INTO events (event_type, source, severity, payload)
+            VALUES ('milestone_achieved', 'human', 'normal', %s)
+        """, (json.dumps({'milestone_id': milestone_id}),))
+        return {"status": "success", "message": f"Milestone {milestone_id} achieved."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

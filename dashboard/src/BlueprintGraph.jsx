@@ -3,6 +3,7 @@ import axios from 'axios'
 import mermaid from 'mermaid'
 import { RefreshCcw, Info, CheckCircle, XCircle, Search, FileText, Play, Pause, SkipForward, Send, Radio, GitBranch, Settings } from 'lucide-react'
 import EventTimeline from './EventTimeline'
+import MilestoneTracker from './components/MilestoneTracker'
 
 // Initialize Mermaid
 mermaid.initialize({
@@ -305,8 +306,15 @@ function BlueprintGraph({ activityId }) {
         )}
       </div>
 
-      {/* Event Timeline */}
-      <EventTimeline activityId={activityId} />
+      {/* Milestones & Timeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <MilestoneTracker activityId={activityId} />
+        </div>
+        <div className="lg:col-span-2">
+          <EventTimeline activityId={activityId} />
+        </div>
+      </div>
 
       {/* Side Detail Panel (Drawer) */}
       {selectedTask && (

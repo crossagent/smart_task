@@ -41,7 +41,6 @@ def emit_event(
     event_type: str,
     source: str = "system",
     payload: Dict[str, Any] = None,
-    project_id: str = None,
     activity_id: str = None,
     task_id: str = None,
     resource_id: str = None,
@@ -49,15 +48,14 @@ def emit_event(
 ) -> int:
     """向事件总线写入新事件。"""
     query = """
-        INSERT INTO events (event_type, source, payload, project_id, activity_id, task_id, resource_id, status)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')
+        INSERT INTO events (event_type, source, payload, activity_id, task_id, resource_id, status)
+        VALUES (%s, %s, %s, %s, %s, %s, 'pending')
         RETURNING id
     """
     params = (
         event_type,
         source,
         json.dumps(payload or {}),
-        project_id,
         activity_id,
         task_id,
         resource_id
@@ -169,7 +167,7 @@ def _handle_task_completed(event: Dict[str, Any], connection=None) -> str:
     # 2. DAG 推进
     # 查找依赖于此任务且处于 pending 状态的任务
     dependents = execute_query(
-        "SELECT id, project_id, activity_id, depends_on FROM tasks WHERE %s = ANY(depends_on) AND status = 'pending'",
+        "SELECT id, activity_id, depends_on FROM tasks WHERE %s = ANY(depends_on) AND status = 'pending'",
         (task_id,),
         connection=connection
     )
@@ -192,7 +190,6 @@ def _handle_task_completed(event: Dict[str, Any], connection=None) -> str:
             emit_event(
                 EVENT_TASK_READY,
                 task_id=dep_id,
-                project_id=dep['project_id'],
                 activity_id=dep['activity_id'],
                 connection=connection
             )
@@ -205,7 +202,7 @@ def _handle_task_ready(event: Dict[str, Any], connection=None) -> str:
     task_id = event['task_id']
     
     task_data = execute_query(
-        "SELECT t.id, t.module_id, t.module_iteration_goal, m.owner_res_id, t.project_id, t.activity_id "
+        "SELECT t.id, t.module_id, t.module_iteration_goal, m.owner_res_id, t.activity_id "
         "FROM tasks t JOIN modules m ON t.module_id = m.id "
         "WHERE t.id = %s AND t.status = 'ready'",
         (task_id,),
@@ -249,7 +246,6 @@ def _handle_task_ready(event: Dict[str, Any], connection=None) -> str:
         EVENT_TASK_ASSIGNED,
         task_id=task_id,
         resource_id=owner_id,
-        project_id=task['project_id'],
         activity_id=task['activity_id'],
         connection=connection
     )
