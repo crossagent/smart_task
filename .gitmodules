@@ -1,6 +1,6 @@
-[submodule "mcpservers/smart_task_hub"]
-	path = mcpservers/smart_task_hub
-	url = https://github.com/crossagent/smart-task-hub.git
 [submodule "dashboard-server"]
 	path = dashboard-server
 	url = https://github.com/crossagent/smart-task-dashboard.git
+[submodule "smart_task_hub"]
+	path = smart_task_hub
+	url = https://github.com/crossagent/smart-task-hub.git
