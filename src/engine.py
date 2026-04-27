@@ -161,7 +161,7 @@ def _handle_task_completed(event: Dict[str, Any], connection=None) -> str:
             connection=connection
         )
         execute_mutation(
-            "UPDATE task_assignments SET status = 'completed' WHERE task_id = %s AND status = 'active'",
+            "UPDATE task_assignments SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE task_id = %s AND status = 'active'",
             (task_id,),
             connection=connection
         )
@@ -169,8 +169,8 @@ def _handle_task_completed(event: Dict[str, Any], connection=None) -> str:
     # 2. DAG 推进
     # 查找依赖于此任务且处于 pending 状态的任务
     dependents = execute_query(
-        "SELECT id, project_id, activity_id, depends_on FROM tasks WHERE depends_on @> %s::jsonb AND status = 'pending'",
-        (json.dumps([task_id]),),
+        "SELECT id, project_id, activity_id, depends_on FROM tasks WHERE %s = ANY(depends_on) AND status = 'pending'",
+        (task_id,),
         connection=connection
     )
     
@@ -240,7 +240,10 @@ def _handle_task_ready(event: Dict[str, Any], connection=None) -> str:
     # 触发外部 Agent
     handle = agent_supervisor.pool.get(owner_id)
     if handle:
-        _send_agent_request(handle.url, handle.agent_id, task_id, task['module_iteration_goal'])
+        # 支持对象 (PersistentAgentHandle) 或 字典 (Mock)
+        h_url = getattr(handle, 'url', None) or handle.get('url')
+        h_agent_id = getattr(handle, 'agent_id', None) or handle.get('agent_id')
+        _send_agent_request(h_url, h_agent_id, task_id, task['module_iteration_goal'])
     
     emit_event(
         EVENT_TASK_ASSIGNED,

@@ -68,7 +68,7 @@ def test_decoupled_task_flow(resource_id, project_id, module_id):
         module_id=module_id,
         project_id=project_id,
         module_iteration_goal="Upgrade to PG17",
-        status="ready"
+        status="pending"
     )
     assert "Successfully processed" in msg_tsk
     

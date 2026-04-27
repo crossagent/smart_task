@@ -10,7 +10,7 @@ import respx
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from src.scheduler import run_system_bus_cycle
+from src.engine import run_to_stable as run_system_bus_cycle
 from src.supervisor import agent_supervisor
 from src.db import execute_query, execute_mutation
 
@@ -47,12 +47,22 @@ def mock_agent_pool():
 
 
 def run_step():
-    with patch("src.scheduler.threading.Thread") as mock_thread:
-        def sync_run(target, args=(), kwargs={}, daemon=True):
-            target(*args, **kwargs)
-            return MagicMock()
-        mock_thread.side_effect = sync_run
-        run_system_bus_cycle()
+    from src.engine import emit_event, EVENT_TASK_READY, EVENT_TASK_COMPLETED
+    
+    # 0. Promote Root Pending Tasks
+    execute_mutation("UPDATE tasks SET status = 'ready' WHERE status = 'pending' AND (depends_on IS NULL OR depends_on = '{}')")
+
+    # 1. Detect Ready Tasks
+    ready_tasks = execute_query("SELECT id FROM tasks WHERE status = 'ready' AND id NOT IN (SELECT task_id FROM events WHERE event_type = %s AND status = 'pending')", (EVENT_TASK_READY,))
+    for t in ready_tasks:
+        emit_event(EVENT_TASK_READY, task_id=t['id'])
+        
+    # 2. Detect Terminal Tasks
+    terminal_tasks = execute_query("SELECT id FROM tasks WHERE status IN ('done', 'failed', 'blocked') AND id NOT IN (SELECT task_id FROM events WHERE event_type = %s)", (EVENT_TASK_COMPLETED,))
+    for t in terminal_tasks:
+        emit_event(EVENT_TASK_COMPLETED, task_id=t['id'])
+
+    run_system_bus_cycle()
 
 
 def q(sql, params=None):

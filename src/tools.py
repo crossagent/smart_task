@@ -220,8 +220,8 @@ def assign_task(task_id: str, resource_id: str) -> str:
         VALUES (%s, %s, CURRENT_TIMESTAMP, 'active')
     """
     try:
-        # Also update task status to in_progress if it was ready
-        execute_mutation("UPDATE tasks SET status = 'in_progress' WHERE id = %s AND status = 'ready'", (task_id,))
+        # Also update task status to in_progress if it was ready or pending
+        execute_mutation("UPDATE tasks SET status = 'in_progress' WHERE id = %s AND status IN ('ready', 'pending')", (task_id,))
         execute_mutation(sql, (task_id, resource_id))
         return f"Task '{task_id}' assigned to resource '{resource_id}'."
     except Exception as e:
@@ -269,6 +269,10 @@ def submit_task_deliverable(task_id: str, status: str, execution_result: str, ar
         engine.emit_event(
             engine.EVENT_TASK_COMPLETED,
             task_id=task_id,
+            payload={
+                "status": status,
+                "execution_result": execution_result
+            },
             project_id=p_id,
             activity_id=a_id
         )
