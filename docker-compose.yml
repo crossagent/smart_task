@@ -1,203 +1,92 @@
 services:
+  db:
+    image: postgres:17-alpine
+    container_name: smart_task_db
+    restart: always
+    environment:
+      - POSTGRES_USER=smart_user
+      - POSTGRES_PASSWORD=smart_pass
+      - POSTGRES_DB=smart_task_hub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smart_user -d smart_task_hub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   smart_task_hub:
     build: 
-      context: ./src
+      context: ./smart_task_hub
       dockerfile: Dockerfile
     container_name: smart_task_hub
     restart: always
     environment:
-      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
-      - AGENT_NAME=smart_task_hub
-      - POSTGRES_USER=smart_user
-      - POSTGRES_PASSWORD=smart_pass
-      - POSTGRES_DB=smart_task_hub
-      - DB_HOST=127.0.0.1
+      - DB_HOST=db
       - DB_NAME=smart_task_hub
       - DB_USER=smart_user
       - DB_PASSWORD=smart_pass
-      - DB_URL=postgresql://smart_user:smart_pass@127.0.0.1:5432/smart_task_hub
       - ADK_A2A_SERVER_PORT=45666
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - DOCKER_MANAGED_AGENTS=true
-      - GIT_CONFIG_PARAMETERS='url.https://${GIT_AUTH_TOKEN}@github.com/.insteadOf=https://github.com/'
+      - MCP_TRANSPORT=streamable-http
+      - PORT=45666
+      - FASTMCP_HOST=0.0.0.0
     ports:
       - "45666:45666"
-      - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - .:/app
+      - ./smart_task_hub:/app
       - /app/.venv
-    command: ["uv", "run", "python", "-m", "src.server"]
-
-  hub_pm:
-    build:
-      context: ./hub
-      dockerfile: Dockerfile
-    environment:
-      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart_task.git
-      - AGENT_NAME=hub_pm
-      - DB_HOST=smart_task_hub
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - ADK_A2A_SERVER_PORT=9010
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - GIT_CONFIG_PARAMETERS='url.https://${GIT_AUTH_TOKEN}@github.com/.insteadOf=https://github.com/'
-    ports:
-      - "9010:9010"
-    volumes:
-      - ./hub:/app
-      - /app/.venv
-    command: ["uv", "run", "adk", "api_server", "./", "--port", "9010", "--host", "0.0.0.0"]
+    command: ["uv", "run", "python", "server.py"]
     depends_on:
-      - smart_task_hub
+      db:
+        condition: service_healthy
 
-  task_planner:
+  data_engineer:
     build: 
-      context: ./experts/task_planner
+      context: ./experts/data_engineer
       dockerfile: Dockerfile
+    container_name: data_engineer
     environment:
-      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-activity-manager.git
-      - AGENT_NAME=task_planner
-      - DB_HOST=smart_task_hub
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - ADK_A2A_SERVER_PORT=9011
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - GIT_CONFIG_PARAMETERS='url.https://${GIT_AUTH_TOKEN}@github.com/.insteadOf=https://github.com/'
-    ports:
-      - "9011:9011"
-    volumes:
-      - ./experts/task_planner:/app
-      - /app/.venv
-    command: ["uv", "run", "adk", "api_server", "./", "--port", "9011", "--host", "0.0.0.0"]
-    depends_on:
-      - smart_task_hub
-
-  coder_expert:
-    build: 
-      context: ./experts/coder_expert
-      dockerfile: Dockerfile
-    environment:
-      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-quant-developer.git
-      - AGENT_NAME=coder_expert
-      - DB_HOST=smart_task_hub
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - ADK_A2A_SERVER_PORT=9012
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - SMART_WORKSPACE_ROOT=/workspaces
-      - GIT_CONFIG_PARAMETERS='url.https://${GIT_AUTH_TOKEN}@github.com/.insteadOf=https://github.com/'
-    ports:
-      - "9012:9012"
-    volumes:
-      - ./experts/coder_expert:/app
-      - /app/.venv
-    command: ["uv", "run", "adk", "api_server", "./", "--port", "9012", "--host", "0.0.0.0"]
-    depends_on:
-      - smart_task_hub
-
-  trader_expert:
-    build: 
-      context: ./experts/trader_expert
-      dockerfile: Dockerfile
-    environment:
-      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-execution-trader.git
-      - AGENT_NAME=trader_expert
-      - DB_HOST=smart_task_hub
+      - AGENT_NAME=data_engineer
+      - DB_HOST=db
       - DB_NAME=smart_task_hub
       - DB_USER=smart_user
       - DB_PASSWORD=smart_pass
       - ADK_A2A_SERVER_PORT=9013
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - GIT_CONFIG_PARAMETERS='url.https://${GIT_AUTH_TOKEN}@github.com/.insteadOf=https://github.com/'
+      - SKILLS_PATH=/app/skills/data_engineer_skill
     ports:
       - "9013:9013"
     volumes:
-      - ./experts/trader_expert:/app
+      - ./experts/data_engineer:/app
+      - ./experts/data_engineer/skills:/app/skills
       - /app/.venv
     command: ["uv", "run", "adk", "api_server", "./", "--port", "9013", "--host", "0.0.0.0"]
     depends_on:
-      - smart_task_hub
+      db:
+        condition: service_healthy
+      smart_task_hub:
+        condition: service_started
 
-  research_expert:
-    build: 
-      context: ./experts/research_expert
+  dashboard:
+    build:
+      context: ./dashboard-server
       dockerfile: Dockerfile
+    container_name: smart_task_dashboard
+    restart: always
     environment:
-      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-quant-researcher.git
-      - AGENT_NAME=research_expert
-      - DB_HOST=smart_task_hub
+      - DB_HOST=db
       - DB_NAME=smart_task_hub
       - DB_USER=smart_user
       - DB_PASSWORD=smart_pass
-      - ADK_A2A_SERVER_PORT=9014
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - GIT_CONFIG_PARAMETERS='url.https://${GIT_AUTH_TOKEN}@github.com/.insteadOf=https://github.com/'
+      - PORT=8080
     ports:
-      - "9014:9014"
-    volumes:
-      - ./experts/research_expert:/app
-      - /app/.venv
-    command: ["uv", "run", "adk", "api_server", "./", "--port", "9014", "--host", "0.0.0.0"]
+      - "8080:8080"
     depends_on:
-      - smart_task_hub
-
-  risk_expert:
-    build: 
-      context: ./experts/risk_expert
-      dockerfile: Dockerfile
-    environment:
-      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-risk-manager.git
-      - AGENT_NAME=risk_expert
-      - DB_HOST=smart_task_hub
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - ADK_A2A_SERVER_PORT=9015
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - GIT_CONFIG_PARAMETERS='url.https://${GIT_AUTH_TOKEN}@github.com/.insteadOf=https://github.com/'
-    ports:
-      - "9015:9015"
-    volumes:
-      - ./experts/risk_expert:/app
-      - /app/.venv
-    command: ["uv", "run", "adk", "api_server", "./", "--port", "9015", "--host", "0.0.0.0"]
-    depends_on:
-      - smart_task_hub
-
-  data_expert:
-    build: 
-      context: ./experts/data_expert
-      dockerfile: Dockerfile
-    environment:
-      - GIT_AUTH_TOKEN=${GIT_AUTH_TOKEN}
-      - GIT_REMOTE_URL=https://github.com/crossagent/smart-agent-data-engineer.git
-      - AGENT_NAME=data_expert
-      - DB_HOST=smart_task_hub
-      - DB_NAME=smart_task_hub
-      - DB_USER=smart_user
-      - DB_PASSWORD=smart_pass
-      - ADK_A2A_SERVER_PORT=9016
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - GIT_CONFIG_PARAMETERS='url.https://${GIT_AUTH_TOKEN}@github.com/.insteadOf=https://github.com/'
-    ports:
-      - "9016:9016"
-    volumes:
-      - ./experts/data_expert:/app
-      - /app/.venv
-    command: ["uv", "run", "adk", "api_server", "./", "--port", "9016", "--host", "0.0.0.0"]
-    depends_on:
-      - smart_task_hub
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:
