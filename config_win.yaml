@@ -1,0 +1,23 @@
+db_config:
+  host: "localhost"
+  port: 5433
+  dbname: "smart_task_hub"
+  user: "smart_user"
+  password: "smart_pass"
+
+agents_pool:
+  - id: "architect"
+    resource_id: "RES-ARCHITECT-001"
+    dir: "smart_task_app/agents/architect"
+    port: 9011
+    default_workspace: "d:/MyProject/smart_task"
+  - id: "coder"
+    resource_id: "RES-CODER-001"
+    dir: "smart_task_app/agents/coder"
+    port: 9012
+    default_workspace: "d:/MyProject/smart_task"
+  - id: "main_coordinator"
+    resource_id: "RES-ROOT-COORD-001"
+    dir: "smart_task_app"
+    port: 9010
+    default_workspace: "d:/MyProject/smart_task"
