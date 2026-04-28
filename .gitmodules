@@ -4,3 +4,6 @@
 [submodule "smart_task_hub"]
 	path = smart_task_hub
 	url = https://github.com/crossagent/smart-task-hub.git
+[submodule "experts"]
+	path = experts
+	url = https://github.com/crossagent/experts.git
