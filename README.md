@@ -70,23 +70,33 @@ graph TD
 
 ---
 
-## 🚀 快速开始
+## 📦 安装与部署 (Installation)
 
-### 1. 环境配置
-在根目录下创建 `.env` 文件：
-```env
-DB_HOST=
-DB_PORT=
-DB_USER=
-DB_PASSWORD=
-DB_NAME=
-PORT=
+### 1. 作为 Claude Skill 安装 [NEW]
+如果你使用支持 GitHub 安装的 Claude 客户端（如 `claudebank` 或手动配置），可以直接安装此工程作为增强能力：
+
+```bash
+# 使用 claudebank (示例)
+claudebank install https://github.com/your-repo/smart_task
 ```
 
-### 2. 数据库初始化
-执行 `init_smart_task.sql` 中的脚本以创建必要的数据库和表。
+**手动安装：**
+将本仓库的 `skills/smart_task_management/` 目录拷贝至你的 Claude Skill 路径：
+*   **Windows**: `%USERPROFILE%\.claude\skills\`
+*   **macOS/Linux**: `~/.claude/skills/`
 
-### 3. 使用 Docker 部署
+### 2. 本地服务环境配置
+在根目录下创建 `.env` 文件：
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=yourpassword
+DB_NAME=smart_task
+PORT=8000
+```
+
+### 3. 使用 Docker 部署 Hub
 ```bash
 docker-compose up -d --build
 ```
@@ -120,10 +130,11 @@ docker-compose up -d --build
 
 ## 📂 目录结构 (Directory Structure)
 
-* `src/task_management`: 业务元数据管理 (CRUD)。
-* `src/task_execution`: 核心编排与调度逻辑。
-* `src/resource_management`: **[NEW]** 物理算力与 Workspace 锁定管理器。
-* `src/mcp_server`: MCP 协议对接层。
+* `smart_task_hub/`: 核心调度中枢 (Control Plane)，负责任务状态流转与事件分发。
+* `skills/`: Claude Skill 定义目录，包含 `SKILL.md` 指令集。
+* `dashboard/`: 任务可视化监控面板 (React)。
+* `docs/`: 详细设计文档与 API 说明。
+* `docker-compose.yml`: 一键化容器编排配置。
 
 ---
 
